@@ -10,7 +10,7 @@ from models import SimpleCNN
 from network import create_adjacency_matrix, load_adjacency_matrix, select_byzantine_nodes, load_byzantine_nodes
 from train import train_epoch, evaluate_models
 from visualization import plot_results, plot_adjacency_matrix
-from utils import save_checkpoint, load_checkpoint, get_last_checkpoint_info
+from utils import save_checkpoint, load_checkpoint, get_last_checkpoint_info, save_structured_metrics
 from variance import (
     save_model_states, compute_model_variance, plot_model_variance,
     plot_model_similarity_heatmaps, analyze_parameter_distributions,
@@ -52,6 +52,9 @@ def main():
             graph = nx.from_numpy_array(adj_matrix)
             byzantine_path = os.path.join(result_dir, "byzantine_indices.npy")
             byzantine_indices = load_byzantine_nodes(byzantine_path)
+            
+            # Load structured metrics
+            train_losses, test_accuracies = load_structured_metrics(result_dir, config.variants, config.num_nodes)
         else:
             # No valid checkpoint, start a new run
             print("No valid checkpoint found, starting a new run")
@@ -152,7 +155,7 @@ def main():
 
         # Train one epoch
         epoch_losses = train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion,
-                                  current_lr, config.variants, attack_type, config, epoch)
+                                current_lr, config.variants, attack_type, config, epoch)
         
         # Store training losses
         for variant in config.variants:
@@ -163,50 +166,20 @@ def main():
         for variant in config.variants:
             test_accuracies[variant].append(epoch_accuracies[variant])
         
-        # Save checkpoints for all variants
-        for variant in config.variants:
-            # Extract model states for this variant
-            model_states = [model.state_dict() for model in models[variant]]
-            
-            # Create checkpoint dictionary
-            checkpoint = {
-                'epoch': epoch,
-                'model_states': model_states,
-                'losses': train_losses[variant],
-                'accuracies': test_accuracies[variant]
-            }
-            
-            # Save checkpoint using utils function
-            save_checkpoint(checkpoint, epoch, config.result_dir, prefix=f"checkpoint_{variant}")
-
-        # Save all metrics in a consistent format
-        metrics_dict = {}
-        for variant in config.variants:
-            metrics_dict[f'{variant}_train_losses'] = train_losses[variant]
-            metrics_dict[f'{variant}_test_accuracies'] = test_accuracies[variant]
-        np.savez(os.path.join(config.result_dir, "metrics.npz"), **metrics_dict)
+        # Save structured metrics 
+        save_structured_metrics(models, train_losses, test_accuracies, byzantine_indices, config.variants, config.result_dir, epoch)
 
         # Plot results at specified intervals
         if (epoch + 1) % config.plot_interval == 0:
             plot_results(train_losses, test_accuracies, byzantine_indices, config.variants, config.result_dir)
         
-        # Every 30 epochs (or at epoch 0), analyze model variance and convergence
+        # Every 50 epochs (or at epoch 0), analyze model variance and convergence
         if epoch % 50 == 0:
-            # Save model states
-            save_model_states(models, epoch, config.variants, byzantine_indices, config.result_dir)
-            
             # Compute and record model variance
             variances = compute_model_variance(models, config.variants, byzantine_indices, config)
-            for variant in config.variants:
-                if variant not in variance_history:
-                    variance_history[variant] = []
-                variance_history[variant].append(variances[variant])
-            
-            # Save variance history
-            save_variance_history(variance_history, config.result_dir)
             
             # Plot variance
-            plot_model_variance(variance_history, config.variants, config.result_dir)
+            plot_model_variance({}, config.variants, config.result_dir)
             
             # Generate similarity heatmaps
             plot_model_similarity_heatmaps(models, config.variants, byzantine_indices, config, epoch, config.result_dir)
@@ -218,12 +191,11 @@ def main():
 
     # Final plotting
     plot_results(train_losses, test_accuracies, byzantine_indices, config.variants, config.result_dir)
-    
+
     # Final model analysis
-    save_model_states(models, config.num_epochs, config.variants, byzantine_indices, config.result_dir)
     plot_model_similarity_heatmaps(models, config.variants, byzantine_indices, config, config.num_epochs, config.result_dir)
     analyze_parameter_distributions(models, config.variants, byzantine_indices, config, config.num_epochs, config.result_dir)
-    
+
     print("Training completed successfully")
 
 

@@ -203,18 +203,6 @@ def krum_screen(params_list, num_byzantine, device):
     return params_list[selected_index]
 
 def krum_trimmed_mean_screen(params_list, trim_param, num_byzantine, device):
-    """
-    BRIDGE-B: Krum followed by Trimmed Mean
-    
-    Args:
-        params_list (list): List of parameter sets
-        trim_param (int): Number of values to trim from each end
-        num_byzantine (int): Number of Byzantine nodes
-        device (torch.device): Device to perform computations on
-        
-    Returns:
-        list: Aggregated parameters
-    """
     num_neighbors = len(params_list)
     if num_neighbors <= 3*num_byzantine + 2 or num_neighbors <= 4*num_byzantine:
         raise ValueError(f"Insufficient nodes for Krum+Trimmed. Need more than max({3*num_byzantine + 2}, {4*num_byzantine}) nodes.")
@@ -236,7 +224,7 @@ def krum_trimmed_mean_screen(params_list, trim_param, num_byzantine, device):
         # Remove the selected parameters and perform trimmed mean on the rest
         trimmed_mean_params_list = [params for i, params in enumerate(params_list) if i != selected_index]
 
-    # Ensure we have enough params for trimmed mean
+        # Ensure we have enough params for trimmed mean
     if len(trimmed_mean_params_list) <= 2 * trim_param:
         # If not enough params, use median as a fallback
         return median_screen(trimmed_mean_params_list)

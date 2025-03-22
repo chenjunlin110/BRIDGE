@@ -73,3 +73,115 @@ def save_metrics(losses, accuracies, result_dir, epoch):
         pickle.dump(accuracies, f)
     
     return losses_path, accuracies_path
+
+def save_structured_metrics(models, train_losses, test_accuracies, byzantine_indices, variants, result_dir, epoch):
+    """
+    Save losses and accuracies in a structured matrix format
+    
+    Args:
+        models (dict): Dictionary of models for each variant and node
+        train_losses (dict): Dictionary of losses for each variant
+        test_accuracies (dict): Dictionary of accuracies for each variant
+        byzantine_indices (list): Indices of Byzantine nodes
+        variants (list): List of variant names
+        result_dir (str): Directory to save data
+        epoch (int): Current epoch
+    """
+    metrics_dir = os.path.join(result_dir, "structured_metrics")
+    os.makedirs(metrics_dir, exist_ok=True)
+    
+    num_nodes = len(next(iter(models.values())))
+    
+    # Process each variant
+    for variant in variants:
+        # Get current loss and accuracy for this variant
+        current_loss = train_losses[variant][-1] if variant in train_losses and train_losses[variant] else float('nan')
+        current_acc = test_accuracies[variant][-1] if variant in test_accuracies and test_accuracies[variant] else float('nan')
+        
+        # Initialize matrices (if it's epoch 0 or file doesn't exist)
+        if epoch == 0 or not os.path.exists(os.path.join(metrics_dir, f"{variant}_loss.npy")):
+            loss_matrix = np.zeros((1, num_nodes))
+            acc_matrix = np.zeros((1, num_nodes))
+        else:
+            # Load existing matrices
+            try:
+                loss_matrix = np.load(os.path.join(metrics_dir, f"{variant}_loss.npy"))
+                acc_matrix = np.load(os.path.join(metrics_dir, f"{variant}_accuracy.npy"))
+                
+                # Add a new row for the current epoch
+                loss_matrix = np.vstack([loss_matrix, np.zeros((1, num_nodes))])
+                acc_matrix = np.vstack([acc_matrix, np.zeros((1, num_nodes))])
+            except Exception as e:
+                print(f"Error loading matrices for {variant}: {str(e)}")
+                # If loading fails, create new matrices
+                loss_matrix = np.zeros((epoch + 1, num_nodes))
+                acc_matrix = np.zeros((epoch + 1, num_nodes))
+        
+        # Fill current epoch data
+        for node_idx in range(num_nodes):
+            # For Byzantine nodes, use NaN
+            if node_idx in byzantine_indices:
+                loss_matrix[-1, node_idx] = np.nan
+                acc_matrix[-1, node_idx] = np.nan
+            else:
+                # For honest nodes, use the current variant's metrics
+                loss_matrix[-1, node_idx] = current_loss
+                acc_matrix[-1, node_idx] = current_acc
+        
+        # Save matrices
+        try:
+            np.save(os.path.join(metrics_dir, f"{variant}_loss.npy"), loss_matrix)
+            np.save(os.path.join(metrics_dir, f"{variant}_accuracy.npy"), acc_matrix)
+        except Exception as e:
+            print(f"Error saving matrices for {variant}: {str(e)}")
+    
+    print(f"Structured metrics saved at epoch {epoch}")
+
+def load_structured_metrics(result_dir, variants, num_nodes):
+    """
+    Load structured metrics data
+    
+    Args:
+        result_dir (str): Directory containing metrics
+        variants (list): List of variant names
+        num_nodes (int): Number of nodes
+        
+    Returns:
+        tuple: (all_losses, all_accuracies)
+    """
+    metrics_dir = os.path.join(result_dir, "structured_metrics")
+    if not os.path.exists(metrics_dir):
+        print(f"No structured metrics found in {metrics_dir}")
+        return {}, {}
+    
+    all_losses = {}
+    all_accuracies = {}
+    
+    for variant in variants:
+        # Load loss data
+        loss_path = os.path.join(metrics_dir, f"{variant}_loss.npy")
+        if os.path.exists(loss_path):
+            try:
+                loss_matrix = np.load(loss_path)
+                # Convert to list of mean losses per epoch
+                all_losses[variant] = np.nanmean(loss_matrix, axis=1).tolist()
+            except Exception as e:
+                print(f"Error loading loss data for {variant}: {str(e)}")
+                all_losses[variant] = []
+        else:
+            all_losses[variant] = []
+            
+        # Load accuracy data
+        acc_path = os.path.join(metrics_dir, f"{variant}_accuracy.npy")
+        if os.path.exists(acc_path):
+            try:
+                acc_matrix = np.load(acc_path)
+                # Convert to list of mean accuracies per epoch
+                all_accuracies[variant] = np.nanmean(acc_matrix, axis=1).tolist()
+            except Exception as e:
+                print(f"Error loading accuracy data for {variant}: {str(e)}")
+                all_accuracies[variant] = []
+        else:
+            all_accuracies[variant] = []
+    
+    return all_losses, all_accuracies

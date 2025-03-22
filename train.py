@@ -14,10 +14,10 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
         dict: Dictionary of mean losses for each variant
     """
     # Dictionary to store losses for each variant and node
-    epoch_losses = {variant: [[] for _ in range(config.num_nodes)] for variant in variants}
+    epoch_losses = {variant: [0.0] * config.num_nodes for variant in variants}
     
     # Dictionary to store mean losses for return
-    mean_losses = {variant: [] for variant in variants}
+    mean_losses = {variant: 0.0 for variant in variants}
 
     # 1. Each node computes local gradients
     local_gradients = {variant: [] for variant in variants}
@@ -40,7 +40,13 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                 loss.backward()
 
                 # Record loss
-                epoch_losses[variant][node_idx].append(loss.item())
+                if hasattr(model, 'losses'):
+                    model.losses.append(loss.item())
+                else:
+                    model.losses = [loss.item()]
+                
+                # Store the current loss
+                epoch_losses[variant][node_idx] = loss.item()
 
                 # Collect gradients
                 grads = [param.grad.clone() for param in model.parameters()]
@@ -52,7 +58,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                 # Create zero gradients with the same structure as the model
                 zero_grads = [torch.zeros_like(param) for param in models[variant][node_idx].parameters()]
                 local_gradients[variant].append(zero_grads)
-                epoch_losses[variant][node_idx].append(float('inf'))
+                epoch_losses[variant][node_idx] = float('inf')
 
     # 2. Broadcast model parameters
     all_params = {variant: [] for variant in variants}
@@ -122,29 +128,31 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
         if node_idx not in byzantine_indices:
             for variant in variants:
                 try:
-                    # Manual update using filtered parameters and local gradients
-                    for param, agg_param, grad in zip(models[variant][node_idx].parameters(),
-                                                    filtered_params[variant][node_idx],
-                                                    local_gradients[variant][node_idx]):
-                        # Update: param = aggregated_param - lr * gradient
-                        param.data = agg_param - current_lr * grad
+                    # Verify we have valid parameters and gradients
+                    if (node_idx < len(filtered_params[variant]) and 
+                        node_idx < len(local_gradients[variant]) and
+                        filtered_params[variant][node_idx] is not None and
+                        local_gradients[variant][node_idx] is not None):
+                        
+                        # Manual update using filtered parameters and local gradients
+                        model_params = list(models[variant][node_idx].parameters())
+                        for param_idx, (param, agg_param, grad) in enumerate(zip(
+                                model_params,
+                                filtered_params[variant][node_idx],
+                                local_gradients[variant][node_idx])):
+                            # Update: param = aggregated_param - lr * gradient
+                            param.data = agg_param - current_lr * grad
+                    else:
+                        print(f"Warning: Missing parameters or gradients for node {node_idx}, variant {variant}")
                 except Exception as e:
                     print(f"Error updating model for node {node_idx}, variant {variant}: {str(e)}")
 
     # Calculate mean loss for each variant (excluding Byzantine nodes)
     for variant in variants:
-        variant_losses = []
-        for node_idx in range(config.num_nodes):
-            if node_idx not in byzantine_indices and epoch_losses[variant][node_idx]:
-                # Only include honest nodes with valid losses
-                node_loss = np.mean([loss for loss in epoch_losses[variant][node_idx] 
-                                    if loss != float('inf')])
-                if not np.isnan(node_loss) and not np.isinf(node_loss):
-                    variant_losses.append(node_loss)
-        
-        # Calculate mean loss across all honest nodes
-        if variant_losses:
-            mean_losses[variant] = np.mean(variant_losses)
+        honest_losses = [loss for i, loss in enumerate(epoch_losses[variant]) 
+                       if i not in byzantine_indices and not np.isnan(loss) and not np.isinf(loss)]
+        if honest_losses:
+            mean_losses[variant] = np.mean(honest_losses)
         else:
             mean_losses[variant] = float('inf')
     
@@ -186,8 +194,12 @@ def evaluate_models(models, testloader, byzantine_indices, variants, config):
                     if total > 0:
                         accuracy = 100 * correct / total
                         variant_accuracies.append(accuracy)
+                        # Store accuracy on the model for later reference
+                        model.last_accuracy = accuracy
                 except Exception as e:
                     print(f"Error evaluating model for node {node_idx}, variant {variant}: {str(e)}")
+                    model.last_accuracy = 0.0
+                    variant_accuracies.append(0.0)
         
         # Store average accuracy for the variant
         if variant_accuracies:

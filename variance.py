@@ -39,7 +39,7 @@ def save_model_states(models, epoch, variants, byzantine_indices, save_dir):
         print(f"Saved model states for {variant} at epoch {epoch}")
 
 
-def compute_model_variance(models, variants, byzantine_indices, config):
+def compute_model_variance(models, variants, byzantine_indices, config, use_structured=True):
     """
     Compute variance between honest nodes' models for each variant
     
@@ -48,11 +48,16 @@ def compute_model_variance(models, variants, byzantine_indices, config):
         variants (list): List of variant names
         byzantine_indices (list): List of byzantine node indices
         config: Configuration object
+        use_structured (bool): Whether to also save variance to structured metrics
         
     Returns:
         dict: Dictionary of variances for each variant
     """
     variances = {variant: 0.0 for variant in variants}
+    
+    # Check for structured metrics directory
+    structured_metrics_dir = os.path.join(config.result_dir, "structured_metrics")
+    os.makedirs(structured_metrics_dir, exist_ok=True)
     
     for variant in variants:
         # Get indices of honest nodes
@@ -76,6 +81,18 @@ def compute_model_variance(models, variants, byzantine_indices, config):
         variance = torch.var(params_tensor, dim=0).mean().item()
         variances[variant] = variance
         
+        # Save variance to structured metrics
+        if use_structured:
+            # Load or create variance matrix
+            variance_path = os.path.join(structured_metrics_dir, f"{variant}_variance.npy")
+            if os.path.exists(variance_path):
+                variance_array = np.load(variance_path)
+                variance_array = np.append(variance_array, variance)
+            else:
+                variance_array = np.array([variance])
+                
+            np.save(variance_path, variance_array)
+        
     return variances
 
 
@@ -90,11 +107,28 @@ def plot_model_variance(variance_history, variants, result_dir):
     """
     plt.figure(figsize=(10, 6))
     
+    # Check for structured metrics
+    structured_metrics_dir = os.path.join(result_dir, "structured_metrics")
+    use_structured = os.path.exists(structured_metrics_dir)
+    
     for variant in variants:
+        if use_structured:
+            # Try to use structured data
+            variance_path = os.path.join(structured_metrics_dir, f"{variant}_variance.npy")
+            if os.path.exists(variance_path):
+                try:
+                    variance_array = np.load(variance_path)
+                    epochs = list(range(0, len(variance_array) * 50, 50)) if len(variance_array) > 1 else [0]
+                    plt.plot(epochs, variance_array, label=variant, marker='o')
+                    continue
+                except Exception as e:
+                    print(f"Error loading structured variance for {variant}: {str(e)}")
+            
+        # Fall back to original data structure
         if variant not in variance_history or not variance_history[variant]:
             continue
             
-        epochs = list(range(0, len(variance_history[variant]) * 30, 30))
+        epochs = list(range(0, len(variance_history[variant]) * 50, 50))
         plt.plot(epochs, variance_history[variant], label=variant, marker='o')
     
     plt.xlabel('Epoch')

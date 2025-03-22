@@ -11,7 +11,7 @@ class Config:
         self.num_nodes = 15
         self.max_byzantine_nodes = 2
         self.learning_rate = 0.01
-        self.batch_size = 60000 / self.num_nodes
+        self.batch_size = int(60000 / self.num_nodes)
         self.num_epochs = 500
         self.plot_interval = 5
         self.trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
