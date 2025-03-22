@@ -203,30 +203,59 @@ def krum_screen(params_list, num_byzantine, device):
     return params_list[selected_index]
 
 def krum_trimmed_mean_screen(params_list, trim_param, num_byzantine, device):
+    """
+    BRIDGE-B: Krum followed by Trimmed Mean
+    
+    Args:
+        params_list (list): List of parameter sets
+        trim_param (int): Number of values to trim from each end
+        num_byzantine (int): Number of Byzantine nodes
+        device (torch.device): Device to perform computations on
+        
+    Returns:
+        list: Aggregated parameters
+    """
     num_neighbors = len(params_list)
+    
+    # Check if we have enough neighbors for the algorithm
     if num_neighbors <= 3*num_byzantine + 2 or num_neighbors <= 4*num_byzantine:
         raise ValueError(f"Insufficient nodes for Krum+Trimmed. Need more than max({3*num_byzantine + 2}, {4*num_byzantine}) nodes.")
-
-    # First, select a parameter set using Krum
-    krum_selected_params = krum_screen(params_list, num_byzantine, device)
-
-    # Find index of the selected parameter set
-    selected_index = -1
-    for i, params in enumerate(params_list):
-        if all(torch.allclose(krum_selected_params[p], params[p]) for p in range(len(params))):
-            selected_index = i
-            break
-
-    # If we couldn't find the index, use all parameters
-    if selected_index == -1:
-        trimmed_mean_params_list = params_list
-    else:
-        # Remove the selected parameters and perform trimmed mean on the rest
-        trimmed_mean_params_list = [params for i, params in enumerate(params_list) if i != selected_index]
-
-        # Ensure we have enough params for trimmed mean
-    if len(trimmed_mean_params_list) <= 2 * trim_param:
-        # If not enough params, use median as a fallback
-        return median_screen(trimmed_mean_params_list)
+    
+    # Number of nodes to select using recursive Krum
+    nodes_to_select = num_neighbors - 2 * num_byzantine
+    
+    # Recursively select nodes using Krum
+    selected_params = []
+    remaining_params = params_list.copy()
+    remaining_indices = list(range(num_neighbors))
+    
+    for _ in range(nodes_to_select):
+        if len(remaining_params) <= num_byzantine + 2:
+            break  # Not enough nodes left for Krum selection
+            
+        # Select a node using Krum
+        selected_param = krum_screen(remaining_params, num_byzantine, device)
         
-    return trimmed_mean_screen(trimmed_mean_params_list, trim_param)
+        # Find the index of the selected parameter set
+        selected_idx = -1
+        for i, params in enumerate(remaining_params):
+            if all(torch.allclose(selected_param[p], params[p]) for p in range(len(params))):
+                selected_idx = i
+                break
+        
+        if selected_idx == -1:
+            break  # Could not find the selected node
+        
+        # Add the selected parameters to our collection
+        selected_params.append(remaining_params[selected_idx])
+        
+        # Remove the selected node from the remaining set
+        remaining_params.pop(selected_idx)
+        remaining_indices.pop(selected_idx)
+    
+    # If we couldn't select enough nodes, fall back to median
+    if len(selected_params) <= 2 * trim_param:
+        return median_screen(params_list)
+    
+    # Apply trimmed mean on the selected parameters
+    return trimmed_mean_screen(selected_params, trim_param)
