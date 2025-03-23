@@ -2,7 +2,7 @@
 #SBATCH --partition=main          # Partition (job queue)
 #SBATCH --requeue                 # Return job to the queue if preempted
 #SBATCH --job-name=BRIDGE         # Assign a short name to your job
-#SBATCH --nodes=10                # Number of nodes you require
+#SBATCH --nodes=1                 # Number of nodes you require
 #SBATCH --ntasks=1                # Total # of tasks across all nodes
 #SBATCH --cpus-per-task=1         # Cores per task (>1 if multithread tasks)
 #SBATCH --mem=16000               # Real memory (RAM) required (MB)

@@ -9,14 +9,14 @@ class Config:
     def __init__(self):
         # Hyperparameters
         self.num_nodes = 15
-        self.max_byzantine_nodes = 2
-        self.learning_rate = 0.01
-        self.batch_size = int(60000 / self.num_nodes)
+        self.max_byzantine_nodes = 1
+        self.learning_rate = 0.1
+        self.batch_size = 64
         self.num_epochs = 500
         self.plot_interval = 5
         self.trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
         self.connectivity = 0.8
-        self.seed = 42  # For reproducibility
+        self.seed = 23  # For reproducibility
         self.variants = ["BRIDGE-T", "BRIDGE-M", "BRIDGE-K", "BRIDGE-B"]
         self.attack_type = "scaled"  # Options: "random", "sign_flipping", "scaled", "targeted"
         # self.attack_schedule = self.attack_schedule  # Function to change attack type over epochs
@@ -27,7 +27,6 @@ class Config:
         self.result_dir = f"results_{self.timestamp}"
         os.makedirs(self.result_dir, exist_ok=True)
         os.makedirs('./data', exist_ok=True)
-        os.makedirs('./checkpoints', exist_ok=True)
         
         # Device selection
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

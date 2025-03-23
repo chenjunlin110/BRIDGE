@@ -1,0 +1,13 @@
+num_nodes: 15
+max_byzantine_nodes: 2
+learning_rate: 0.001
+batch_size: 64
+num_epochs: 500
+plot_interval: 5
+trim_parameter: 2
+connectivity: 0.8
+seed: 42
+variants: ['BRIDGE-T', 'BRIDGE-M', 'BRIDGE-K', 'BRIDGE-B']
+attack_type: scaled
+lr_schedule: <bound method Config.lr_schedule of <config.Config object at 0x104c6c5b0>>
+result_dir: results_20250322-233340

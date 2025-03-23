@@ -11,7 +11,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
     Train all models for one epoch
     
     Returns:
-        dict: Dictionary of mean losses for each variant
+        tuple: (mean_losses, epoch_losses) - Mean losses across nodes and individual node losses
     """
     # Dictionary to store losses for each variant and node
     epoch_losses = {variant: [0.0] * config.num_nodes for variant in variants}
@@ -38,12 +38,6 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
 
                 # Backward pass
                 loss.backward()
-
-                # Record loss
-                if hasattr(model, 'losses'):
-                    model.losses.append(loss.item())
-                else:
-                    model.losses = [loss.item()]
                 
                 # Store the current loss
                 epoch_losses[variant][node_idx] = loss.item()
@@ -156,16 +150,17 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
         else:
             mean_losses[variant] = float('inf')
     
-    return mean_losses
+    return mean_losses, epoch_losses
 
 def evaluate_models(models, testloader, byzantine_indices, variants, config):
     """
     Evaluate all models on the test dataset
     
     Returns:
-        dict: Dictionary of accuracies for each variant
+        tuple: (mean_accuracies, node_accuracies) - Mean accuracies across nodes and individual node accuracies
     """
-    accuracies = {variant: [] for variant in variants}
+    mean_accuracies = {variant: 0.0 for variant in variants}
+    node_accuracies = {variant: [0.0] * config.num_nodes for variant in variants}
 
     for variant in variants:
         variant_accuracies = []
@@ -194,17 +189,21 @@ def evaluate_models(models, testloader, byzantine_indices, variants, config):
                     if total > 0:
                         accuracy = 100 * correct / total
                         variant_accuracies.append(accuracy)
-                        # Store accuracy on the model for later reference
-                        model.last_accuracy = accuracy
+                        # Store accuracy for this node
+                        node_accuracies[variant][node_idx] = accuracy
+                    else:
+                        node_accuracies[variant][node_idx] = 0.0
                 except Exception as e:
                     print(f"Error evaluating model for node {node_idx}, variant {variant}: {str(e)}")
-                    model.last_accuracy = 0.0
-                    variant_accuracies.append(0.0)
+                    node_accuracies[variant][node_idx] = 0.0
+            else:
+                # For Byzantine nodes, store NaN
+                node_accuracies[variant][node_idx] = float('nan')
         
         # Store average accuracy for the variant
         if variant_accuracies:
-            accuracies[variant] = np.mean(variant_accuracies)
+            mean_accuracies[variant] = np.mean(variant_accuracies)
         else:
-            accuracies[variant] = 0.0
+            mean_accuracies[variant] = 0.0
 
-    return accuracies
+    return mean_accuracies, node_accuracies
