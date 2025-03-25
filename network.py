@@ -85,6 +85,18 @@ def load_byzantine_nodes(path):
     return np.load(path).tolist()
 
 # --- Aggregation algorithms ---
+def no_screen(params_list):
+    # No screening, return the mean of all parameters
+    num_params = len(params_list[0])  # Number of parameters in each set
+    aggregated_params = []
+    for param_idx in range(num_params):
+        # Stack all parameters along the first dimension
+        stacked = torch.stack([p[param_idx] for p in params_list], dim=0)
+        avg = torch.mean(stacked, dim=0)
+        aggregated_params.append(avg)
+    return aggregated_params
+
+
 def trimmed_mean_screen(params_list, trim_param):
     """
     BRIDGE-T: Coordinate-wise trimmed mean
@@ -117,10 +129,10 @@ def trimmed_mean_screen(params_list, trim_param):
         sorted_values, _ = torch.sort(param_values, dim=0)
 
         # Get trimmed values
-        trimmed_values = sorted_values[trim_param:len(params_list) - trim_param]
+        trimmed_values = sorted_values[trim_param: -trim_param]
 
         # Calculate mean
-        aggregated_param = torch.mean(trimmed_values, dim=0)
+        aggregated_param = torch.mean(trimmed_values, dim=0, dtype=torch.float)
 
         # Reshape back to original shape and add to aggregated parameters
         aggregated_params.append(aggregated_param.reshape(original_shape))
@@ -150,7 +162,7 @@ def median_screen(params_list):
             param_values = torch.stack([p[param_idx] for p in params_list], dim=0)
 
         # Get median values - torch.median returns (values, indices)
-        median_values = torch.median(param_values, dim=0)[0]
+        median_values = torch.median(param_values, dim=0, dtype=torch.float)
 
         # Reshape back to original shape
         aggregated_params.append(median_values.reshape(original_shape))

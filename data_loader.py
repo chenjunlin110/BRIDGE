@@ -31,6 +31,9 @@ def load_data(config):
         # Distribute data among nodes
         trainloaders = []
         subset_size = len(trainset) // config.num_nodes
+
+        indices = list(range(len(trainset)))
+        np.random.shuffle(indices)
         
         for i in range(config.num_nodes):
             # Create a subset for this node
@@ -60,6 +63,13 @@ def load_data(config):
         )
         
         print(f"Data distributed among {config.num_nodes} nodes ({subset_size} samples per node)")
+        for i, loader in enumerate(trainloaders):
+            labels = []
+        for data, target in loader:
+            labels.extend(target.numpy())
+        unique, counts = np.unique(labels, return_counts=True)
+        print(f"Node {i}, labels distribution: {dict(zip(unique, counts))}")
+
         return trainloaders, testloader
         
     except Exception as e:

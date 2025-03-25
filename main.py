@@ -119,6 +119,7 @@ def main():
         current_lr = config.learning_rate
         if hasattr(config, 'lr_schedule'):
             current_lr = config.lr_schedule(epoch)
+            print(f"Current learning rate: {current_lr:.6f}")
         
         # Get current attack type (use attack_schedule if available)
         attack_type = config.attack_type

@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import os
 from byzantine import get_byzantine_params
-from network import trimmed_mean_screen, median_screen, krum_screen, krum_trimmed_mean_screen
+from network import trimmed_mean_screen, median_screen, krum_screen, krum_trimmed_mean_screen, no_screen
 
 def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, current_lr, variants,
                 attack_type, config, epoch):
@@ -13,6 +13,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
     Returns:
         tuple: (mean_losses, epoch_losses) - Mean losses across nodes and individual node losses
     """
+    regularizer = 0.0001
     # Dictionary to store losses for each variant and node
     epoch_losses = {variant: [0.0] * config.num_nodes for variant in variants}
     
@@ -34,7 +35,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                 # Forward pass
                 model.zero_grad()
                 output = model(data)
-                loss = criterion(output, target)
+                loss = criterion(output, target) +  regularizer * sum([torch.norm(param) for param in model.parameters()])
 
                 # Backward pass
                 loss.backward()
@@ -47,19 +48,13 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                 local_gradients[variant].append(grads)
         except Exception as e:
             print(f"Error in training node {node_idx}: {str(e)}")
-            # Add placeholder gradients to maintain array structure
-            for variant in variants:
-                # Create zero gradients with the same structure as the model
-                zero_grads = [torch.zeros_like(param) for param in models[variant][node_idx].parameters()]
-                local_gradients[variant].append(zero_grads)
-                epoch_losses[variant][node_idx] = float('inf')
 
     # 2. Broadcast model parameters
     all_params = {variant: [] for variant in variants}
-    for node_idx in range(config.num_nodes):
-        for variant in variants:
-            model_params = [param.data.clone() for param in models[variant][node_idx].parameters()]
+    for variant in variants:
+        for node_idx in range(config.num_nodes):
 
+            model_params = [param.data.clone() for param in models[variant][node_idx].parameters()]
             # Apply Byzantine attack if this is a Byzantine node
             if node_idx in byzantine_indices:
                 model_params = get_byzantine_params(model_params, attack_type, config.device)
@@ -68,11 +63,10 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
 
     # 3. Receive and filter parameters
     filtered_params = {variant: [] for variant in variants}
-    for node_idx in range(config.num_nodes):
+    for variant in variants:
+        for node_idx in range(config.num_nodes):
         # Get indices of neighbors (including self)
-        neighbor_indices = np.where(adj_matrix[node_idx])[0]
-
-        for variant in variants:
+            neighbor_indices = np.where(adj_matrix[node_idx])[0]
             try:
                 # Get parameters from neighbors
                 neighbor_params = [all_params[variant][i] for i in neighbor_indices]
@@ -83,7 +77,6 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                     if len(neighbor_params) <= 2 * config.trim_parameter:
                         # Not enough for trimming, use median instead as fallback
                         print(f"Warning: Not enough neighbors for BRIDGE-T at node {node_idx}. Using median as fallback.")
-                        aggregated_params = median_screen(neighbor_params)
                     else:
                         aggregated_params = trimmed_mean_screen(neighbor_params, config.trim_parameter)
                 elif variant == "BRIDGE-M":
@@ -92,9 +85,8 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                     # Check if we have enough params for Krum
                     max_byzantine = min(len(byzantine_indices), len(neighbor_params) - 2)
                     if max_byzantine <= 0:
-                        # Not enough for Krum, use median as fallback
+                        # Not enough for Krum, 
                         print(f"Warning: Not enough neighbors for BRIDGE-K at node {node_idx}. Using median as fallback.")
-                        aggregated_params = median_screen(neighbor_params)
                     else:
                         aggregated_params = krum_screen(neighbor_params, max_byzantine, config.device)
                 elif variant == "BRIDGE-B":
@@ -103,10 +95,11 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                     if max_byzantine <= 0 or len(neighbor_params) <= 2 * config.trim_parameter:
                         # Not enough for combination, use median as fallback
                         print(f"Warning: Not enough neighbors for BRIDGE-B at node {node_idx}. Using median as fallback.")
-                        aggregated_params = median_screen(neighbor_params)
                     else:
                         aggregated_params = krum_trimmed_mean_screen(neighbor_params, config.trim_parameter,
                                                                 max_byzantine, config.device)
+                elif variant == "none":
+                    aggregated_params = no_screen(neighbor_params)
                 else:
                     raise ValueError(f"Unknown variant: {variant}")
 
