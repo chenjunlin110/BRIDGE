@@ -11,7 +11,8 @@
 #SBATCH --error=slurm.%N.%j.err   # STDERR output file (optional)
 
 # Load conda environment properly
-source $CONDA_BASE/etc/profile.d/conda.sh
+source /home/jc3585/anaconda3/etc/profile.d/conda.sh
 conda activate ML
-
+echo "($CONDA_DEFAULT_ENV)"
+echo "$(which python)"
 srun python3 main.py
