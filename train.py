@@ -32,8 +32,9 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                 model = models[variant][node_idx]
                 model.train()
 
-                # Forward pass
-                model.zero_grad()
+                optimzer = torch.optim.Adam(model.parameters(), lr=current_lr)
+                optimizer.zero_grad()
+
                 output = model(data)
                 loss = criterion(output, target) +  regularizer * sum([torch.norm(param) for param in model.parameters()])
 
