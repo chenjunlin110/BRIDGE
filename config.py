@@ -11,7 +11,7 @@ class Config:
         self.num_nodes = 15
         self.max_byzantine_nodes = 0
         self.learning_rate = 0.01
-        self.batch_size = 64
+        self.batch_size = 60,000 // self.num_nodes
         self.num_epochs = 500
         self.plot_interval = 5
         self.trim_parameter = 1  # For BRIDGE-T and BRIDGE-B
@@ -21,7 +21,7 @@ class Config:
         self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "targeted"
         # self.attack_schedule = self.attack_schedule  # Function to change attack type over epochs
         self.lr_schedule = self.lr_schedule  # Function to change learning rate over epochs
-        self.local_epochs = 5  # Number of local epochs for each node
+        # self.local_epochs = 5  # Number of local epochs for each node
         # Paths
         self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.result_dir = f"results_{self.timestamp}"

@@ -36,6 +36,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                 output = model(data)
                 loss = criterion(output, target) +  regularizer * sum([torch.norm(param) for param in model.parameters()])
 
+                model.zero_grad()
                 # Backward pass
                 loss.backward()
                 
@@ -49,16 +50,16 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
             print(f"Error in training node {node_idx}: {str(e)}")
 
     # 2. Broadcast model parameters
-    all_params = {variant: [] for variant in variants}
+    all_params = {variant: [[] for _ in range(config.num_nodes)] for variant in variants}
     for variant in variants:
         for node_idx in range(config.num_nodes):
 
-            model_params = [param.data.clone() for param in models[variant][node_idx].parameters()]
+            model_param = [param.data.clone() for param in models[variant][node_idx].parameters()]
             # Apply Byzantine attack if this is a Byzantine node
             if node_idx in byzantine_indices:
-                model_params = get_byzantine_params(model_params, attack_type, config.device)
+                model_param = get_byzantine_params(model_param, attack_type, config.device)
 
-            all_params[variant].append(model_params)
+            all_params[variant][node_idx].append(model_param)
 
     # 3. Receive and filter parameters
     filtered_params = {variant: [[] for _ in range(config.num_nodes)] for variant in variants}
@@ -68,7 +69,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
             neighbor_indices = np.where(adj_matrix[node_idx])[0]
             try:
                 # Get parameters from neighbors
-                neighbor_params = [all_params[variant][i] for i in neighbor_indices]
+                neighbor_params = [all_params[variant][i][-1] for i in neighbor_indices]
 
                 # Apply screening functions based on variant
                 if variant == "BRIDGE-T":

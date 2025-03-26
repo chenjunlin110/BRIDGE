@@ -30,19 +30,22 @@ def load_data(config):
 
         # Distribute data among nodes
         trainloaders = []
+        
+        # Create a shuffled list of all indices
+        all_indices = list(range(len(trainset)))
+        np.random.shuffle(all_indices)
+        
+        # Calculate subset size
         subset_size = len(trainset) // config.num_nodes
-
-        indices = list(range(len(trainset)))
-        np.random.shuffle(indices)
         
         for i in range(config.num_nodes):
-            # Create a subset for this node
+            # Get a slice of the shuffled indices for this node
             start_idx = i * subset_size
-            end_idx = (i + 1) * subset_size if i < config.num_nodes - 1 else len(trainset)
-            indices = list(range(start_idx, end_idx))
+            end_idx = (i + 1) * subset_size if i < config.num_nodes - 1 else len(all_indices)
+            node_indices = all_indices[start_idx:end_idx]
             
             # Create DataLoader for this node
-            subset = torch.utils.data.Subset(trainset, indices)
+            subset = torch.utils.data.Subset(trainset, node_indices)
             trainloaders.append(
                 torch.utils.data.DataLoader(
                     subset, 
@@ -62,13 +65,7 @@ def load_data(config):
             pin_memory=torch.cuda.is_available()
         )
         
-        print(f"Data distributed among {config.num_nodes} nodes ({subset_size} samples per node)")
-        for i, loader in enumerate(trainloaders):
-            labels = []
-        for data, target in loader:
-            labels.extend(target.numpy())
-        unique, counts = np.unique(labels, return_counts=True)
-        print(f"Node {i}, labels distribution: {dict(zip(unique, counts))}")
+        print(f"Data distributed among {config.num_nodes} nodes (approx. {subset_size} samples per node)")
 
         return trainloaders, testloader
         
