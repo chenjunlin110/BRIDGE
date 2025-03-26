@@ -8,16 +8,16 @@ from datetime import datetime
 class Config:
     def __init__(self):
         # Hyperparameters
-        self.num_nodes = 15
-        self.max_byzantine_nodes = 0
-        self.learning_rate = 0.01
+        self.num_nodes = 50
+        self.max_byzantine_nodes = 2
+        self.learning_rate = 0.1
         self.batch_size = int(60000 // self.num_nodes)
         self.num_epochs = 500
         self.plot_interval = 5
         self.trim_parameter = 1  # For BRIDGE-T and BRIDGE-B
-        self.connectivity = 0.8
+        self.connectivity = 0.7
         self.seed = 23  # For reproducibility
-        self.variants = ["none"]
+        self.variants = ["BRIDGE-T"]
         self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "targeted"
         # self.attack_schedule = self.attack_schedule  # Function to change attack type over epochs
         self.lr_schedule = self.lr_schedule  # Function to change learning rate over epochs
@@ -47,7 +47,10 @@ class Config:
     
     def lr_schedule(self, epoch):
         """Learning rate scheduler that reduces lr over time"""
-        return self.learning_rate / (1 + 0.01 * math.log(epoch + 1))
+        if epoch < 100:
+            return self.learning_rate
+        else:
+            return self.learning_rate / (1 + 0.01 * math.log(epoch + 1))
     
     def attack_schedule(self, epoch):
         """

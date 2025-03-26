@@ -96,8 +96,10 @@ def main():
     # Initialize tensors for storing training data
     # For each variant, create tensors of shape [epochs, nodes]
     model_states = {variant: [] for variant in config.variants}
-    train_losses = {variant: torch.zeros(0, config.num_nodes) for variant in config.variants}
-    test_accuracies = {variant: torch.zeros(0, config.num_nodes) for variant in config.variants}
+    all_train_losses = {variant: torch.zeros(0, config.num_nodes) for variant in config.variants}
+    all_test_accuracies = {variant: torch.zeros(0, config.num_nodes) for variant in config.variants}
+    all_mean_losses = {variant: torch.zeros(0) for variant in config.variants}
+    all_mean_accuracies = {variant: torch.zeros(0) for variant in config.variants}
 
     # Load existing data if resuming
     if args.resume and args.result_dir:
@@ -106,10 +108,10 @@ def main():
             acc_path = os.path.join(args.result_dir, f"bridge_{variant}_accuracy.pt")
             
             if os.path.exists(loss_path):
-                train_losses[variant] = torch.load(loss_path)
+                all_train_losses[variant] = torch.load(loss_path)
             
             if os.path.exists(acc_path):
-                test_accuracies[variant] = torch.load(acc_path)
+                all_test_accuracies[variant] = torch.load(acc_path)
 
     # Main training loop
     for epoch in range(start_epoch, config.num_epochs):
@@ -133,24 +135,34 @@ def main():
         # Store training losses
         for variant in config.variants:
             losses_tensor = torch.tensor([epoch_losses[variant]], dtype=torch.float32)
-            if train_losses[variant].shape[0] == 0:
-                train_losses[variant] = losses_tensor
+            mean_losses_tensor = torch.tensor([mean_losses[variant]], dtype=torch.float32)
+            if all_train_losses[variant].shape[0] == 0:
+                all_train_losses[variant] = losses_tensor
             else:
-                train_losses[variant] = torch.cat([train_losses[variant], losses_tensor], dim=0)
+                all_train_losses[variant] = torch.cat([all_train_losses[variant], losses_tensor], dim=0)
+            if mean_losses_tensor.shape[0] == 0:
+                all_mean_losses[variant] = mean_losses_tensor
+            else:
+                all_mean_losses[variant] = torch.cat([all_mean_losses[variant], mean_losses_tensor])
 
         # Evaluate models
         mean_accuracies, node_accuracies = evaluate_models(models, testloader, byzantine_indices, config.variants, config)
         
         # Store test accuracies
         for variant in config.variants:
-            acc_tensor = torch.tensor([node_accuracies[variant]], dtype=torch.float32)
-            if test_accuracies[variant].shape[0] == 0:
-                test_accuracies[variant] = acc_tensor
+            all_acc_tensor = torch.tensor([node_accuracies[variant]], dtype=torch.float32)
+            mean_acc_tensor = torch.tensor([mean_accuracies[variant]], dtype=torch.float32)
+            if all_test_accuracies[variant].shape[0] == 0:
+                all_test_accuracies[variant] = all_acc_tensor
             else:
-                test_accuracies[variant] = torch.cat([test_accuracies[variant], acc_tensor], dim=0)
+                all_test_accuracies[variant] = torch.cat([all_test_accuracies[variant], all_acc_tensor], dim=0)
+            if mean_acc_tensor.shape[0] == 0:
+                all_mean_accuracies[variant] = mean_acc_tensor
+            else:
+                all_mean_accuracies[variant] = torch.cat([all_mean_accuracies[variant], mean_acc_tensor])
         
         # Store model states (every 10 epochs or final epoch)
-        if epoch % 10 == 0 or epoch == config.num_epochs - 1:
+        if epoch % 50 == 0 or epoch == config.num_epochs - 1:
             for variant in config.variants:
                 # Save state dicts for each node
                 epoch_state_dicts = []
@@ -163,15 +175,15 @@ def main():
                 model_states[variant].append(epoch_state_dicts)
                 
                 # Save tensor files
-                torch.save(train_losses[variant], os.path.join(config.result_dir, f"bridge_{variant}_loss.pt"))
-                torch.save(test_accuracies[variant], os.path.join(config.result_dir, f"bridge_{variant}_accuracy.pt"))
+                torch.save(all_train_losses[variant], os.path.join(config.result_dir, f"bridge_{variant}_loss.pt"))
+                torch.save(all_test_accuracies[variant], os.path.join(config.result_dir, f"bridge_{variant}_accuracy.pt"))
                 torch.save(model_states[variant], os.path.join(config.result_dir, f"bridge_{variant}_model.pt"))
             
             print(f"Saved model states and metrics at epoch {epoch+1}")
 
         # Plot results at specified intervals
         if (epoch + 1) % config.plot_interval == 0 or epoch == config.num_epochs - 1:
-            plot_results(train_losses, test_accuracies, byzantine_indices, config.variants, config.result_dir)
+            plot_results(all_mean_losses, all_mean_accuracies, byzantine_indices, config.variants, config.result_dir)
         
         # Every 50 epochs (or at epoch 0), analyze model variance
         if epoch % 50 == 0 or epoch == config.num_epochs - 1:

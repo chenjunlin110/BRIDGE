@@ -28,12 +28,12 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, vari
         
         if variant in all_epoch_accuracies and len(all_epoch_accuracies[variant]) > 0:
             # Get data from tensor
-            acc_data = all_epoch_accuracies[variant]
-            num_epochs = acc_data.shape[0]
+            mean_acc = all_epoch_accuracies[variant]
+            print(mean_acc.shape)
+            num_epochs = mean_acc.shape[0]
             epochs = list(range(1, num_epochs + 1))
             
             # Plot mean accuracy
-            mean_acc = np.nanmean(acc_data.numpy(), axis=1)
             plt.plot(epochs, mean_acc, label=f"{variant} (Mean)", color=variant_colors[variant], linewidth=2)
             
         else:
@@ -55,12 +55,11 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, vari
         
         if variant in all_epoch_losses and len(all_epoch_losses[variant]) > 0:
             # Get data from tensor
-            loss_data = all_epoch_losses[variant]
-            num_epochs = loss_data.shape[0]
+            mean_loss = all_epoch_losses[variant]
+            num_epochs = mean_loss.shape[0]
             epochs = list(range(1, num_epochs + 1))
             
             # Plot mean loss
-            mean_loss = np.nanmean(loss_data.numpy(), axis=1)
             plt.plot(epochs, mean_loss, label=f"{variant} (Mean)", color=variant_colors[variant], linewidth=2)
 
         else:
@@ -90,10 +89,9 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, vari
     plt.subplot(2, 1, 1)
     for variant in variants:
         if variant in all_epoch_accuracies and len(all_epoch_accuracies[variant]) > 0:
-            acc_data = all_epoch_accuracies[variant]
-            num_epochs = acc_data.shape[0]
+            mean_acc = all_epoch_accuracies[variant]
+            num_epochs = mean_acc.shape[0]
             epochs = list(range(1, num_epochs + 1))
-            mean_acc = np.nanmean(acc_data.numpy(), axis=1)
             plt.plot(epochs, mean_acc, label=variant, linewidth=2)
     
     plt.xlabel("Epoch")
@@ -107,10 +105,9 @@ def plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, vari
     plt.subplot(2, 1, 2)
     for variant in variants:
         if variant in all_epoch_losses and len(all_epoch_losses[variant]) > 0:
-            loss_data = all_epoch_losses[variant]
-            num_epochs = loss_data.shape[0]
+            mean_loss = all_epoch_losses[variant]
+            num_epochs = mean_loss.shape[0]
             epochs = list(range(1, num_epochs + 1))
-            mean_loss = np.nanmean(loss_data.numpy(), axis=1)
             plt.plot(epochs, mean_loss, label=variant, linewidth=2)
     
     plt.xlabel("Epoch")

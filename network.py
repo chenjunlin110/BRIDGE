@@ -144,7 +144,7 @@ def median_screen(params_list):
     BRIDGE-M: Coordinate-wise median
     
     Args:
-        params_list (list): List of parameter sets
+        params_list (tensor): tensor of parameter sets
         
     Returns:
         list: Aggregated parameters
@@ -162,7 +162,7 @@ def median_screen(params_list):
             param_values = torch.stack([p[param_idx] for p in params_list], dim=0)
 
         # Get median values - torch.median returns (values, indices)
-        median_values = torch.median(param_values, dim=0, dtype=torch.float)
+        median_values, _ = torch.median(param_values, dim=0)
 
         # Reshape back to original shape
         aggregated_params.append(median_values.reshape(original_shape))
