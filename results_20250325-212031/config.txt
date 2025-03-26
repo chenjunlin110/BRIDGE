@@ -1,0 +1,14 @@
+num_nodes: 15
+max_byzantine_nodes: 0
+learning_rate: 0.01
+batch_size: 64
+num_epochs: 500
+plot_interval: 5
+trim_parameter: 1
+connectivity: 0.8
+seed: 23
+variants: ['none']
+attack_type: random
+lr_schedule: <bound method Config.lr_schedule of <config.Config object at 0x0000014697F5ADF0>>
+local_epochs: 5
+result_dir: results_20250325-212031

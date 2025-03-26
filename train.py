@@ -21,7 +21,8 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
     mean_losses = {variant: 0.0 for variant in variants}
 
     # 1. Each node computes local gradients
-    local_gradients = {variant: [] for variant in variants}
+    local_gradients = {variant: {node_idx: [] for node_idx in range(config.num_nodes)}
+                       for variant in variants}
     for node_idx in range(config.num_nodes):
         # Get batch data
         try:
@@ -31,9 +32,6 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
             for variant in variants:
                 model = models[variant][node_idx]
                 model.train()
-
-                optimzer = torch.optim.Adam(model.parameters(), lr=current_lr)
-                optimizer.zero_grad()
 
                 output = model(data)
                 loss = criterion(output, target) +  regularizer * sum([torch.norm(param) for param in model.parameters()])
@@ -46,7 +44,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
 
                 # Collect gradients
                 grads = [param.grad.clone() for param in model.parameters()]
-                local_gradients[variant].append(grads)
+                local_gradients[variant][node_idx].append(grads)
         except Exception as e:
             print(f"Error in training node {node_idx}: {str(e)}")
 
@@ -63,7 +61,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
             all_params[variant].append(model_params)
 
     # 3. Receive and filter parameters
-    filtered_params = {variant: [] for variant in variants}
+    filtered_params = {variant: [[] for _ in range(config.num_nodes)] for variant in variants}
     for variant in variants:
         for node_idx in range(config.num_nodes):
         # Get indices of neighbors (including self)
@@ -104,11 +102,11 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                 else:
                     raise ValueError(f"Unknown variant: {variant}")
 
-                filtered_params[variant].append(aggregated_params)
+                filtered_params[variant][node_idx].append(aggregated_params)
             except Exception as e:
                 print(f"Error in screening for node {node_idx}, variant {variant}: {str(e)}")
                 # Use node's own parameters as fallback
-                filtered_params[variant].append(all_params[variant][node_idx])
+                filtered_params[variant][node_idx].append(all_params[variant][node_idx])
 
     # 4. Update models
     for node_idx in range(config.num_nodes):
@@ -126,8 +124,8 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
                         model_params = list(models[variant][node_idx].parameters())
                         for param_idx, (param, agg_param, grad) in enumerate(zip(
                                 model_params,
-                                filtered_params[variant][node_idx],
-                                local_gradients[variant][node_idx])):
+                                filtered_params[variant][node_idx][-1],
+                                local_gradients[variant][node_idx][-1])):
                             # Update: param = aggregated_param - lr * gradient
                             param.data = agg_param - current_lr * grad
                     else:
