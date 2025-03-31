@@ -1,0 +1,14 @@
+num_nodes: 15
+max_byzantine_nodes: 0
+learning_rate: 0.1
+batch_size: 4000
+num_epochs: 500
+plot_interval: 5
+trim_parameter: 1
+connectivity: 0.7
+seed: 23
+variants: ['BRIDGE-T']
+attack_type: random
+lr_schedule: <bound method Config.lr_schedule of <config.Config object at 0x102d805b0>>
+backdoor_attack_label: 7
+result_dir: results_20250326-192420

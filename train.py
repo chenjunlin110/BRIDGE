@@ -13,7 +13,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
     Returns:
         tuple: (mean_losses, epoch_losses) - Mean losses across nodes and individual node losses
     """
-    regularizer = 0.0001
+    regularizer = 0.001
     # Dictionary to store losses for each variant and node
     epoch_losses = {variant: [0.0] * config.num_nodes for variant in variants}
     
@@ -57,7 +57,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
             model_param = [param.data.clone() for param in models[variant][node_idx].parameters()]
             # Apply Byzantine attack if this is a Byzantine node
             if node_idx in byzantine_indices:
-                model_param = get_byzantine_params(model_param, attack_type, config.device)
+                model_param = get_byzantine_params(model_param, attack_type, config.device, config)
 
             all_params[variant][node_idx].append(model_param)
 

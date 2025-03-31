@@ -14,14 +14,19 @@ class Config:
         self.batch_size = int(60000 // self.num_nodes)
         self.num_epochs = 500
         self.plot_interval = 5
-        self.trim_parameter = 1  # For BRIDGE-T and BRIDGE-B
+        self.trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
         self.connectivity = 0.7
         self.seed = 23  # For reproducibility
-        self.variants = ["BRIDGE-T"]
-        self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "targeted"
+        self.variants = ["BRIDGE-B"]
+        self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "targeted", "backdoor"
         # self.attack_schedule = self.attack_schedule  # Function to change attack type over epochs
         self.lr_schedule = self.lr_schedule  # Function to change learning rate over epochs
         # self.local_epochs = 5  # Number of local epochs for each node
+        
+        # Backdoor attack parameters
+        self.backdoor_attack_label = 7  # Target label for backdoor attack
+        self.backdoor_attack_scale = 1.0  # Scaling factor for backdoor attack
+        
         # Paths
         self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.result_dir = f"results_{self.timestamp}"
@@ -34,6 +39,7 @@ class Config:
         
         # Set random seeds for reproducibility
         self.set_seeds()
+        
         
     def set_seeds(self):
         """Set random seeds for reproducibility"""
@@ -50,7 +56,7 @@ class Config:
         if epoch < 100:
             return self.learning_rate
         else:
-            return self.learning_rate / (1 + 0.01 * math.log(epoch + 1))
+            return self.learning_rate / (1 + 0.06 * math.log(epoch + 1))
     
     def attack_schedule(self, epoch):
         """

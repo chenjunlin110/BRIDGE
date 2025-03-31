@@ -11,6 +11,7 @@ from network import create_adjacency_matrix, load_adjacency_matrix, select_byzan
 from train import train_epoch, evaluate_models
 from visualization import plot_results, plot_adjacency_matrix, plot_model_variance
 from analysis import run_analysis
+import time
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Byzantine-Resilient Federated Learning')
@@ -175,9 +176,11 @@ def main():
                 model_states[variant].append(epoch_state_dicts)
                 
                 # Save tensor files
+                start_time = time.time()
                 torch.save(all_train_losses[variant], os.path.join(config.result_dir, f"bridge_{variant}_loss.pt"))
                 torch.save(all_test_accuracies[variant], os.path.join(config.result_dir, f"bridge_{variant}_accuracy.pt"))
                 torch.save(model_states[variant], os.path.join(config.result_dir, f"bridge_{variant}_model.pt"))
+                print(f"the time suing in saving {time.time() - start_time}")
             
             print(f"Saved model states and metrics at epoch {epoch+1}")
 
