@@ -8,13 +8,13 @@ from datetime import datetime
 class Config:
     def __init__(self):
         # Hyperparameters
-        self.num_nodes = 50
-        self.max_byzantine_nodes = 2
+        self.num_nodes = 10
+        self.max_byzantine_nodes = 1
         self.learning_rate = 0.1
         self.batch_size = int(60000 // self.num_nodes)
         self.num_epochs = 10
         self.plot_interval = 5
-        self.trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
+        self.trim_parameter = 1  # For BRIDGE-T and BRIDGE-B
         self.connectivity = 0.7
         self.seed = 23  # For reproducibility
         self.variant = "BRIDGE-T"  # Algorithm variant to use
