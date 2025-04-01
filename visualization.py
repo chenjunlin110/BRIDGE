@@ -4,121 +4,67 @@ import networkx as nx
 import os
 import torch
 
-def plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, variants, result_dir):
+def plot_results(all_epoch_losses, all_epoch_accuracies, byzantine_indices, variant, result_dir):
     """
-    Plot training losses and test accuracies for all variants
+    Plot training losses and test accuracies
     
     Args:
-        all_epoch_losses (dict): Dictionary of losses for each variant
-        all_epoch_accuracies (dict): Dictionary of accuracies for each variant
+        all_epoch_losses (torch.Tensor): Tensor of losses
+        all_epoch_accuracies (torch.Tensor): Tensor of accuracies
         byzantine_indices (list): Indices of Byzantine nodes
-        variants (list): List of BRIDGE variants
+        variant (str): Algorithm variant being used
         result_dir (str): Directory to save plots
     """
     # Create figure for accuracy and loss plots
-    plt.figure(figsize=(18, 12))
-    
-    # Create consistent color map for variants
-    colors = plt.cm.tab10(np.linspace(0, 1, len(variants)))
-    variant_colors = {variant: colors[i] for i, variant in enumerate(variants)}
-    
-    # Plot accuracy curves for each variant (top row)
-    for i, variant in enumerate(variants):
-        plt.subplot(2, len(variants), i + 1)
-        
-        if variant in all_epoch_accuracies and len(all_epoch_accuracies[variant]) > 0:
-            # Get data from tensor
-            mean_acc = all_epoch_accuracies[variant]
-            print(mean_acc.shape)
-            num_epochs = mean_acc.shape[0]
-            epochs = list(range(1, num_epochs + 1))
-            
-            # Plot mean accuracy
-            plt.plot(epochs, mean_acc, label=f"{variant} (Mean)", color=variant_colors[variant], linewidth=2)
-            
-        else:
-            plt.text(0.5, 0.5, "No accuracy data available", ha='center', va='center', transform=plt.gca().transAxes)
-
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy (%)")
-        plt.title(f"Accuracy ({variant})")
-        plt.grid(True, alpha=0.3)
-        plt.ylim(0, 100)  # Accuracy ranges from 0 to 100%
-        
-        # Only add legend if we have multiple lines
-        if plt.gca().get_legend_handles_labels()[0]:
-            plt.legend(loc='lower right')
-
-    # Plot loss curves for each variant (bottom row)
-    for i, variant in enumerate(variants):
-        plt.subplot(2, len(variants), i + len(variants) + 1)
-        
-        if variant in all_epoch_losses and len(all_epoch_losses[variant]) > 0:
-            # Get data from tensor
-            mean_loss = all_epoch_losses[variant]
-            num_epochs = mean_loss.shape[0]
-            epochs = list(range(1, num_epochs + 1))
-            
-            # Plot mean loss
-            plt.plot(epochs, mean_loss, label=f"{variant} (Mean)", color=variant_colors[variant], linewidth=2)
-
-        else:
-            plt.text(0.5, 0.5, "No loss data available", ha='center', va='center', transform=plt.gca().transAxes)
-
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.title(f"Loss ({variant})")
-        plt.grid(True, alpha=0.3)
-        
-        # Use log scale for loss
-        if variant in all_epoch_losses and len(all_epoch_losses[variant]) > 0:
-            plt.yscale("log")
-        
-        # Only add legend if we have multiple lines
-        if plt.gca().get_legend_handles_labels()[0]:
-            plt.legend(loc='upper right')
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(result_dir, "accuracy_loss_comparison.png"), dpi=300)
-    print(f"Plots saved to {result_dir}")
-
-    # Create a separate figure for comparing variants
     plt.figure(figsize=(12, 10))
     
-    # Plot accuracy comparison
+    # Plot accuracy curve
     plt.subplot(2, 1, 1)
-    for variant in variants:
-        if variant in all_epoch_accuracies and len(all_epoch_accuracies[variant]) > 0:
-            mean_acc = all_epoch_accuracies[variant]
-            num_epochs = mean_acc.shape[0]
-            epochs = list(range(1, num_epochs + 1))
-            plt.plot(epochs, mean_acc, label=variant, linewidth=2)
     
+    if all_epoch_accuracies.shape[0] > 0:
+        # Get data from tensor
+        num_epochs = all_epoch_accuracies.shape[0]
+        epochs = list(range(1, num_epochs + 1))
+        
+        # Plot mean accuracy
+        plt.plot(epochs, all_epoch_accuracies, label=f"{variant}", color='blue', linewidth=2)
+    else:
+        plt.text(0.5, 0.5, "No accuracy data available", ha='center', va='center', transform=plt.gca().transAxes)
+
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy (%)")
-    plt.title("Accuracy Comparison Across Variants")
-    plt.legend()
+    plt.title(f"Accuracy ({variant})")
     plt.grid(True, alpha=0.3)
-    plt.ylim(0, 100)
-    
-    # Plot loss comparison
+    plt.ylim(0, 100)  # Accuracy ranges from 0 to 100%
+    plt.legend(loc='lower right')
+
+    # Plot loss curve
     plt.subplot(2, 1, 2)
-    for variant in variants:
-        if variant in all_epoch_losses and len(all_epoch_losses[variant]) > 0:
-            mean_loss = all_epoch_losses[variant]
-            num_epochs = mean_loss.shape[0]
-            epochs = list(range(1, num_epochs + 1))
-            plt.plot(epochs, mean_loss, label=variant, linewidth=2)
     
+    if all_epoch_losses.shape[0] > 0:
+        # Get data from tensor
+        num_epochs = all_epoch_losses.shape[0]
+        epochs = list(range(1, num_epochs + 1))
+        
+        # Plot mean loss
+        plt.plot(epochs, all_epoch_losses, label=f"{variant}", color='red', linewidth=2)
+    else:
+        plt.text(0.5, 0.5, "No loss data available", ha='center', va='center', transform=plt.gca().transAxes)
+
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.title("Loss Comparison Across Variants")
-    plt.legend()
+    plt.title(f"Loss ({variant})")
     plt.grid(True, alpha=0.3)
-    plt.yscale("log")  # Log scale for loss
     
+    # Use log scale for loss
+    if all_epoch_losses.shape[0] > 0:
+        plt.yscale("log")
+    
+    plt.legend(loc='upper right')
+
     plt.tight_layout()
-    plt.savefig(os.path.join(result_dir, "variant_comparison.png"), dpi=300)
+    plt.savefig(os.path.join(result_dir, "accuracy_loss.png"), dpi=300)
+    print(f"Plots saved to {result_dir}")
 
 def plot_adjacency_matrix(adj_matrix, graph, byzantine_indices, result_dir, seed):
     """
@@ -177,56 +123,80 @@ def plot_adjacency_matrix(adj_matrix, graph, byzantine_indices, result_dir, seed
     plt.ylabel("Node Index")
     plt.savefig(os.path.join(result_dir, "adjacency_matrix.png"), dpi=300)
 
-def plot_model_variance(models, variants, byzantine_indices, config, epoch, result_dir):
+def plot_model_variance(models, variant, byzantine_indices, config, epoch, result_dir):
     """
     Plot model parameter variance across honest nodes
     
     Args:
-        models (dict): Dictionary of models for each variant
-        variants (list): List of variant names
+        models (list): List of models for each node
+        variant (str): Algorithm variant being used
         byzantine_indices (list): List of byzantine node indices
         config (Config): Configuration object
         epoch (int): Current epoch
         result_dir (str): Directory to save plot
+        
+    Returns:
+        float: Variance value
     """
     # Create directory for variance plots
     variance_dir = os.path.join(result_dir, "variance")
     os.makedirs(variance_dir, exist_ok=True)
     
-    # Dictionary to store variances
-    variances = {variant: 0.0 for variant in variants}
+    variance = 0.0
     
-    # Compute variance for each variant
-    for variant in variants:
-        # Get honest node indices
-        honest_indices = [i for i in range(config.num_nodes) if i not in byzantine_indices]
+    # Get honest node indices
+    honest_indices = [i for i in range(config.num_nodes) if i not in byzantine_indices]
+    
+    if len(honest_indices) <= 1:
+        print(f"Warning: Not enough honest nodes to compute variance")
+        return 0.0
         
-        if len(honest_indices) <= 1:
-            print(f"Warning: Not enough honest nodes to compute variance for {variant}")
-            continue
-            
-        # Collect parameters from honest nodes
-        params_list = []
-        for node_idx in honest_indices:
-            params = [param.data.clone().view(-1) for param in models[variant][node_idx].parameters()]
-            params_concatenated = torch.cat(params)
-            params_list.append(params_concatenated)
-            
-        # Stack parameters
-        params_tensor = torch.stack(params_list)
+    # Collect parameters from honest nodes
+    params_list = []
+    for node_idx in honest_indices:
+        params = [param.data.clone().view(-1) for param in models[node_idx].parameters()]
+        params_concatenated = torch.cat(params)
+        params_list.append(params_concatenated)
         
-        # Compute variance across nodes for each parameter
-        variance = torch.var(params_tensor, dim=0).mean().item()
-        variances[variant] = variance
+    # Stack parameters
+    params_tensor = torch.stack(params_list)
     
-    # Plot variance comparison
-    plt.figure(figsize=(10, 6))
-    plt.bar(variants, [variances[v] for v in variants])
-    plt.yscale('log')  # Log scale is often better for variance
-    plt.xlabel('Variant')
-    plt.ylabel('Model Parameter Variance')
-    plt.title(f'Model Variance Between Honest Nodes (Epoch {epoch})')
-    plt.savefig(os.path.join(variance_dir, f"model_variance_epoch_{epoch}.png"))
-    plt.close()
+    # Compute variance across nodes for each parameter
+    variance = torch.var(params_tensor, dim=0).mean().item()
     
-    return variances
+    # Plot variance over time (save value to a CSV for later plotting)
+    variance_file = os.path.join(variance_dir, "variance_over_time.csv")
+    if not os.path.exists(variance_file):
+        with open(variance_file, 'w') as f:
+            f.write("epoch,variance\n")
+    
+    with open(variance_file, 'a') as f:
+        f.write(f"{epoch},{variance}\n")
+    
+    # If we have accumulated some data points, plot variance over time
+    if epoch % 10 == 0 or epoch == config.num_epochs - 1:
+        try:
+            # Read the CSV file
+            epochs = []
+            variances = []
+            with open(variance_file, 'r') as f:
+                next(f)  # Skip header
+                for line in f:
+                    e, v = line.strip().split(',')
+                    epochs.append(int(e))
+                    variances.append(float(v))
+            
+            # Plot variance over time
+            plt.figure(figsize=(10, 6))
+            plt.plot(epochs, variances, marker='o')
+            plt.xlabel('Epoch')
+            plt.ylabel('Parameter Variance')
+            plt.title(f'Model Parameter Variance Over Time ({variant})')
+            plt.grid(True, alpha=0.3)
+            plt.yscale('log')  # Log scale is often better for variance
+            plt.savefig(os.path.join(variance_dir, "variance_over_time.png"))
+            plt.close()
+        except Exception as e:
+            print(f"Error plotting variance over time: {str(e)}")
+    
+    return variance

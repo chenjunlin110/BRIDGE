@@ -6,7 +6,9 @@ import os
 # Assuming your functions are in a module called 'network'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from network import trimmed_mean_screen, median_screen
-
+def test_accuracy(results_dir):
+    accuracy = torch.load(os.path.join(results_dir, "accuracy.pt"))
+    print(f"Accuracy: {accuracy}")
 def test_trimmed_mean_screen():
     """
     Test the trimmed_mean_screen function with various scenarios
@@ -131,4 +133,4 @@ def test_trimmed_mean_screen():
     print(f"  Layer 2: {result_multi[1]}")
 
 if __name__ == "__main__":
-    test_trimmed_mean_screen()
+    test_accuracy("results_BRIDGE-T_20250401-092155")

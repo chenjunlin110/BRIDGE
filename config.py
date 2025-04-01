@@ -12,18 +12,15 @@ class Config:
         self.max_byzantine_nodes = 2
         self.learning_rate = 0.1
         self.batch_size = int(60000 // self.num_nodes)
-        self.num_epochs = 500
+        self.num_epochs = 10
         self.plot_interval = 5
         self.trim_parameter = 2  # For BRIDGE-T and BRIDGE-B
         self.connectivity = 0.7
         self.seed = 23  # For reproducibility
-        self.variants = ["BRIDGE-B"]
-        self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "targeted", "backdoor"
-        # self.attack_schedule = self.attack_schedule  # Function to change attack type over epochs
-        self.lr_schedule = self.lr_schedule  # Function to change learning rate over epochs
-        # self.local_epochs = 5  # Number of local epochs for each node
+        self.variant = "BRIDGE-T"  # Algorithm variant to use
         
-        # Backdoor attack parameters
+        # Attack parameters
+        self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "targeted", "backdoor"
         self.backdoor_attack_label = 7  # Target label for backdoor attack
         self.backdoor_attack_scale = 1.0  # Scaling factor for backdoor attack
         
@@ -39,7 +36,6 @@ class Config:
         
         # Set random seeds for reproducibility
         self.set_seeds()
-        
         
     def set_seeds(self):
         """Set random seeds for reproducibility"""

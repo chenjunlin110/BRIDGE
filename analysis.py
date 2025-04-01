@@ -5,195 +5,147 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from models import SimpleCNN
 
-def load_data_for_analysis(result_dir, variants):
+def load_data_for_analysis(result_dir, variant):
     """
     Load saved model data for analysis
     
     Args:
         result_dir (str): Directory containing saved data
-        variants (list): List of variant names
+        variant (str): Algorithm variant name
         
     Returns:
         tuple: (models_data, loss_data, accuracy_data)
     """
-    # Dictionary to store loaded data
-    models_data = {}
-    loss_data = {}
-    accuracy_data = {}
+    # Variables to store loaded data
+    models_data = None
+    loss_data = None
+    accuracy_data = None
     
-    for variant in variants:
-        # Load model data
-        model_path = os.path.join(result_dir, f"bridge_{variant}_model.pt")
-        if os.path.exists(model_path):
-            models_data[variant] = torch.load(model_path)
-            print(f"Loaded model data for {variant}")
-        else:
-            print(f"Warning: No model data found for {variant}")
-        
-        # Load loss data
-        loss_path = os.path.join(result_dir, f"bridge_{variant}_loss.pt")
-        if os.path.exists(loss_path):
-            loss_data[variant] = torch.load(loss_path)
-            print(f"Loaded loss data for {variant}")
-        else:
-            print(f"Warning: No loss data found for {variant}")
-        
-        # Load accuracy data
-        acc_path = os.path.join(result_dir, f"bridge_{variant}_accuracy.pt")
-        if os.path.exists(acc_path):
-            accuracy_data[variant] = torch.load(acc_path)
-            print(f"Loaded accuracy data for {variant}")
-        else:
-            print(f"Warning: No accuracy data found for {variant}")
+    # Load model data
+    model_path = os.path.join(result_dir, "model.pt")
+    if os.path.exists(model_path):
+        models_data = torch.load(model_path)
+        print(f"Loaded model data for {variant}")
+    else:
+        print(f"Warning: No model data found")
+    
+    # Load loss data
+    loss_path = os.path.join(result_dir, "loss.pt")
+    if os.path.exists(loss_path):
+        loss_data = torch.load(loss_path)
+        print(f"Loaded loss data")
+    else:
+        print(f"Warning: No loss data found")
+    
+    # Load accuracy data
+    acc_path = os.path.join(result_dir, "accuracy.pt")
+    if os.path.exists(acc_path):
+        accuracy_data = torch.load(acc_path)
+        print(f"Loaded accuracy data")
+    else:
+        print(f"Warning: No accuracy data found")
     
     return models_data, loss_data, accuracy_data
 
-def recreate_models(models_data, variants, num_nodes, device):
+def recreate_models(models_data, num_nodes, device):
     """
     Recreate model objects from saved state dicts
     
     Args:
-        models_data (dict): Dictionary of saved model data
-        variants (list): List of variant names
+        models_data (list): List of saved model data
         num_nodes (int): Number of nodes
         device (torch.device): Device to load models to
         
     Returns:
-        dict: Dictionary of reconstructed models
+        list: List of reconstructed models
     """
-    all_models = {}
-    
-    for variant in variants:
-        if variant not in models_data:
-            continue
-            
-        # Create empty models for each node
-        variant_models = [SimpleCNN().to(device) for _ in range(num_nodes)]
+    if models_data is None:
+        return None
         
-        # Load state dicts from saved data
-        for epoch_idx, epoch_data in enumerate(models_data[variant]):
-            # We only care about the last epoch
-            if epoch_idx == len(models_data[variant]) - 1:
-                for node_idx, node_state in enumerate(epoch_data):
-                    # Skip if we don't have data for this node
-                    if node_idx >= len(variant_models) or node_state is None:
-                        continue
-                    # Load state dict
-                    variant_models[node_idx].load_state_dict(node_state)
-        
-        all_models[variant] = variant_models
+    # Create empty models for each node
+    models = [SimpleCNN().to(device) for _ in range(num_nodes)]
     
-    return all_models
+    # Load state dicts from saved data (last epoch)
+    if len(models_data) > 0:
+        # Get the last epoch's data
+        last_epoch_states = models_data[-1]
+        for node_idx, state_dict in enumerate(last_epoch_states):
+            # Skip if we don't have data for this node
+            if node_idx >= len(models) or state_dict is None:
+                continue
+            # Load state dict
+            models[node_idx].load_state_dict(state_dict)
+    
+    return models
 
-def plot_convergence_analysis(loss_data, accuracy_data, variants, result_dir):
+def plot_parameter_distributions(models, byzantine_indices, variant, result_dir):
     """
-    Generate convergence analysis plots
+    Analyze and plot distributions of parameter values across honest nodes
     
     Args:
-        loss_data (dict): Dictionary of loss data
-        accuracy_data (dict): Dictionary of accuracy data
-        variants (list): List of variant names
+        models (list): List of models for each node
+        byzantine_indices (list): List of byzantine node indices
+        variant (str): Algorithm variant name
         result_dir (str): Directory to save plots
     """
-    # Create directory for analysis plots
-    analysis_dir = os.path.join(result_dir, "analysis")
-    os.makedirs(analysis_dir, exist_ok=True)
+    if models is None:
+        print("No model data available for parameter distribution analysis")
+        return
+        
+    # Create directory for parameter distributions
+    dist_dir = os.path.join(result_dir, "parameter_distributions")
+    os.makedirs(dist_dir, exist_ok=True)
     
-    # Plot final accuracy comparison
+    # Get honest node indices
+    honest_indices = [i for i in range(len(models)) if i not in byzantine_indices]
+    
     plt.figure(figsize=(10, 6))
-    final_accuracies = {}
     
-    for variant in variants:
-        if variant in accuracy_data:
-            # Get the last epoch's mean accuracy
-            final_acc = np.nanmean(accuracy_data[variant][-1].numpy())
-            final_accuracies[variant] = final_acc
+    # Get the first layer weights from each honest node
+    first_layer_weights = []
+    for node_idx in honest_indices:
+        # Get first layer parameters (typically the first weight matrix)
+        for name, param in models[node_idx].named_parameters():
+            if 'weight' in name and len(param.shape) > 1:
+                # Flatten weights and convert to numpy
+                weights = param.data.view(-1).cpu().numpy()
+                # Only take a sample of 1000 values max to avoid overcrowding
+                if len(weights) > 1000:
+                    indices = np.random.choice(len(weights), 1000, replace=False)
+                    weights = weights[indices]
+                first_layer_weights.append(weights)
+                break
     
-    # Plot bar chart
-    plt.bar(final_accuracies.keys(), final_accuracies.values())
-    plt.ylabel("Accuracy (%)")
-    plt.title("Final Accuracy Comparison")
-    plt.ylim(0, 100)
+    # Plot kernel density estimates of weight distributions
+    for i, weights in enumerate(first_layer_weights):
+        try:
+            sns.kdeplot(weights, label=f"Node {honest_indices[i]}")
+        except Exception as e:
+            print(f"Error plotting KDE for node {honest_indices[i]}: {str(e)}")
     
-    for i, (variant, acc) in enumerate(final_accuracies.items()):
-        plt.text(i, acc + 1, f"{acc:.1f}%", ha='center')
-    
-    plt.savefig(os.path.join(analysis_dir, "final_accuracy_comparison.png"))
+    plt.title(f"{variant} - First Layer Weight Distributions")
+    plt.xlabel("Weight Value")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig(os.path.join(dist_dir, f"{variant}_weights.png"))
     plt.close()
     
-    # Plot convergence speed comparison (epochs to reach 90% of final accuracy)
-    plt.figure(figsize=(10, 6))
-    convergence_epochs = {}
-    
-    for variant in variants:
-        if variant in accuracy_data:
-            # Get the accuracy data
-            acc_data = accuracy_data[variant].numpy()
-            mean_acc = np.nanmean(acc_data, axis=1)
-            final_acc = mean_acc[-1]
-            threshold = 0.9 * final_acc
-            
-            # Find first epoch that reaches the threshold
-            for epoch, acc in enumerate(mean_acc):
-                if acc >= threshold:
-                    convergence_epochs[variant] = epoch + 1  # +1 because epochs are 1-indexed
-                    break
-    
-    if convergence_epochs:
-        plt.bar(convergence_epochs.keys(), convergence_epochs.values())
-        plt.ylabel("Epochs")
-        plt.title("Epochs to Reach 90% of Final Accuracy")
-        
-        for i, (variant, epoch) in enumerate(convergence_epochs.items()):
-            plt.text(i, epoch + 1, str(epoch), ha='center')
-        
-        plt.savefig(os.path.join(analysis_dir, "convergence_speed_comparison.png"))
-    plt.close()
-    
-    # Plot accuracy stability (std dev of last 10% of epochs)
-    plt.figure(figsize=(10, 6))
-    stability_scores = {}
-    
-    for variant in variants:
-        if variant in accuracy_data:
-            # Get the accuracy data
-            acc_data = accuracy_data[variant].numpy()
-            mean_acc = np.nanmean(acc_data, axis=1)
-            
-            # Get the last 10% of epochs
-            last_n = max(1, int(len(mean_acc) * 0.1))
-            last_epochs = mean_acc[-last_n:]
-            
-            # Calculate standard deviation
-            stability = np.std(last_epochs)
-            stability_scores[variant] = stability
-    
-    if stability_scores:
-        plt.bar(stability_scores.keys(), stability_scores.values())
-        plt.ylabel("Standard Deviation")
-        plt.title("Accuracy Stability (Lower is Better)")
-        
-        for i, (variant, std) in enumerate(stability_scores.items()):
-            plt.text(i, std + 0.1, f"{std:.2f}", ha='center')
-        
-        plt.savefig(os.path.join(analysis_dir, "stability_comparison.png"))
-    plt.close()
-    
-    print(f"Convergence analysis plots saved to {analysis_dir}")
+    print(f"Parameter distribution plots saved to {dist_dir}")
 
-def compute_model_similarity(models, variant, honest_indices):
+
+def compute_model_similarity(models, honest_indices):
     """
-    Compute similarity matrix between honest nodes' models for a specific variant
+    Compute similarity matrix between honest nodes' models
     
     Args:
-        models (dict): Dictionary of models for each variant and node
-        variant (str): The variant to analyze
+        models (list): List of models for each node
         honest_indices (list): List of honest node indices
         
     Returns:
         numpy.ndarray: Similarity matrix
     """
-    if variant not in models:
+    if models is None:
         return None
         
     n_honest = len(honest_indices)
@@ -202,15 +154,10 @@ def compute_model_similarity(models, variant, honest_indices):
     # Collect parameters from honest nodes
     params_list = []
     for idx, node_idx in enumerate(honest_indices):
-        if node_idx >= len(models[variant]):
-            continue
-        params = [param.data.clone().view(-1) for param in models[variant][node_idx].parameters()]
+        params = [param.data.clone().view(-1) for param in models[node_idx].parameters()]
         params_concatenated = torch.cat(params)
         params_list.append(params_concatenated)
     
-    if not params_list:
-        return None
-        
     # Compute cosine similarity between each pair of models
     for i in range(len(params_list)):
         for j in range(len(params_list)):
@@ -224,137 +171,152 @@ def compute_model_similarity(models, variant, honest_indices):
     
     return similarity_matrix
 
-def plot_model_similarity_heatmaps(models, variants, byzantine_indices, result_dir):
+
+def plot_model_similarity_heatmap(models, byzantine_indices, variant, result_dir):
     """
-    Plot heatmaps showing model similarity for each variant
+    Plot heatmap showing model similarity between honest nodes
     
     Args:
-        models (dict): Dictionary of models for each variant and node
-        variants (list): List of variant names
+        models (list): List of models for each node
         byzantine_indices (list): List of byzantine node indices
+        variant (str): Algorithm variant name
         result_dir (str): Directory to save plots
     """
+    if models is None:
+        print("No model data available for similarity analysis")
+        return
+        
     # Create directory for similarity heatmaps
     heatmap_dir = os.path.join(result_dir, "similarity_heatmaps")
     os.makedirs(heatmap_dir, exist_ok=True)
     
     # Get honest node indices
-    honest_indices = [i for i in range(max(len(next(iter(models.values()))), 0)) if i not in byzantine_indices]
+    honest_indices = [i for i in range(len(models)) if i not in byzantine_indices]
     honest_labels = [f"Node {i}" for i in honest_indices]
     
-    # Create figure with subplots
-    fig, axes = plt.subplots(1, len(variants), figsize=(5*len(variants), 4), squeeze=False)
+    # Compute similarity matrix
+    similarity_matrix = compute_model_similarity(models, honest_indices)
     
-    for i, variant in enumerate(variants):
-        if variant not in models:
-            continue
-            
-        # Compute similarity matrix
-        similarity_matrix = compute_model_similarity(models, variant, honest_indices)
-        
-        if similarity_matrix is None:
-            continue
-            
-        # Plot heatmap
-        sns.heatmap(
-            similarity_matrix, 
-            annot=False,  
-            cmap="viridis", 
-            vmin=-1, 
-            vmax=1,
-            xticklabels=honest_labels,
-            yticklabels=honest_labels,
-            ax=axes[0, i]
-        )
-        axes[0, i].set_title(f"{variant} - Model Similarity")
+    if similarity_matrix is None:
+        print("Could not compute similarity matrix")
+        return
     
+    # Plot heatmap
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(
+        similarity_matrix, 
+        annot=True,  
+        cmap="viridis", 
+        vmin=-1, 
+        vmax=1,
+        xticklabels=honest_labels,
+        yticklabels=honest_labels
+    )
+    plt.title(f"{variant} - Model Similarity")
     plt.tight_layout()
     plt.savefig(os.path.join(heatmap_dir, "model_similarity.png"))
     plt.close()
     
-    print(f"Model similarity heatmaps saved to {heatmap_dir}")
+    print(f"Model similarity heatmap saved to {heatmap_dir}")
 
-def analyze_parameter_distributions(models, variants, byzantine_indices, result_dir):
+
+def plot_convergence_analysis(loss_data, accuracy_data, variant, result_dir):
     """
-    Analyze and plot distributions of parameter values across honest nodes
+    Generate convergence analysis plots
     
     Args:
-        models (dict): Dictionary of models for each variant and node
-        variants (list): List of variant names
-        byzantine_indices (list): List of byzantine node indices
+        loss_data (torch.Tensor): Tensor of loss data
+        accuracy_data (torch.Tensor): Tensor of accuracy data
+        variant (str): Algorithm variant name
         result_dir (str): Directory to save plots
     """
-    # Create directory for parameter distributions
-    dist_dir = os.path.join(result_dir, "parameter_distributions")
-    os.makedirs(dist_dir, exist_ok=True)
+    # Create directory for analysis plots
+    analysis_dir = os.path.join(result_dir, "analysis")
+    os.makedirs(analysis_dir, exist_ok=True)
     
-    # Get honest node indices
-    honest_indices = [i for i in range(max(len(next(iter(models.values()))), 0)) if i not in byzantine_indices]
+    if loss_data is None or accuracy_data is None:
+        print("No loss or accuracy data available for analysis")
+        return
+        
+    # Plot mean accuracy over time
+    plt.figure(figsize=(10, 6))
     
-    # Only sample a subset of parameters for visualization (first layer weights)
-    for variant in variants:
-        if variant not in models:
-            continue
-            
-        plt.figure(figsize=(10, 6))
-        
-        # Get the first layer weights from each honest node
-        first_layer_weights = []
-        for node_idx in honest_indices:
-            if node_idx >= len(models[variant]):
-                continue
-                
-            # Get first layer parameters (typically the first weight matrix)
-            for name, param in models[variant][node_idx].named_parameters():
-                if 'weight' in name and len(param.shape) > 1:
-                    # Flatten weights and convert to numpy
-                    weights = param.data.view(-1).cpu().numpy()
-                    # Only take a sample of 1000 values max to avoid overcrowding
-                    if len(weights) > 1000:
-                        indices = np.random.choice(len(weights), 1000, replace=False)
-                        weights = weights[indices]
-                    first_layer_weights.append(weights)
-                    break
-        
-        # Plot kernel density estimates of weight distributions
-        for i, weights in enumerate(first_layer_weights):
-            try:
-                sns.kdeplot(weights, label=f"Node {honest_indices[i] if i < len(honest_indices) else i}")
-            except Exception as e:
-                print(f"Error plotting KDE for {variant}, node {honest_indices[i] if i < len(honest_indices) else i}: {str(e)}")
-        
-        plt.title(f"{variant} - First Layer Weight Distributions")
-        plt.xlabel("Weight Value")
-        plt.ylabel("Density")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.savefig(os.path.join(dist_dir, f"{variant}_weights.png"))
-        plt.close()
+    # Get mean accuracy data
+    mean_acc = torch.nanmean(accuracy_data, dim=1).numpy()
+    epochs = list(range(1, len(mean_acc) + 1))
     
-    print(f"Parameter distribution plots saved to {dist_dir}")
+    plt.plot(epochs, mean_acc, marker='o', linestyle='-', label=variant)
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy (%)')
+    plt.title(f'Mean Accuracy Over Time ({variant})')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.savefig(os.path.join(analysis_dir, "accuracy_over_time.png"))
+    plt.close()
+    
+    # Plot mean loss over time
+    plt.figure(figsize=(10, 6))
+    
+    # Get mean loss data
+    mean_loss = torch.nanmean(loss_data, dim=1).numpy()
+    
+    plt.plot(epochs, mean_loss, marker='o', linestyle='-', color='red', label=variant)
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title(f'Mean Loss Over Time ({variant})')
+    plt.grid(True, alpha=0.3)
+    plt.yscale('log')  # Log scale for loss
+    plt.legend()
+    plt.savefig(os.path.join(analysis_dir, "loss_over_time.png"))
+    plt.close()
+    
+    # Analyze convergence speed (epochs to reach 90% of final accuracy)
+    final_acc = mean_acc[-1]
+    threshold = 0.9 * 1
+    
+    convergence_epoch = -1  # Default to not converge
+    for epoch, acc in enumerate(mean_acc):
+        if acc >= threshold:
+            convergence_epoch = epoch + 1  # +1 because epochs are 1-indexed
+            break
+    
+    
+    # Calculate stability (std dev of last 10% of epochs)
+    last_n = max(1, int(len(mean_acc) * 0.1))
+    last_epochs = mean_acc[-last_n:]
+    stability = np.std(last_epochs)
+    
+    print(f"Analysis results for {variant}:")
+    print(f"  Final accuracy: {final_acc:.2f}%")
+    print(f"  Convergence epoch: {convergence_epoch}")
+    print(f"  Accuracy stability (std dev): {stability:.4f}")
+    
+    # Save analysis results to a text file
+    with open(os.path.join(analysis_dir, "analysis_summary.txt"), 'w') as f:
+        f.write(f"Analysis results for {variant}:\n")
+        f.write(f"  Final accuracy: {final_acc:.2f}%\n")
+        f.write(f"  Convergence epoch: {convergence_epoch}\n")
+        f.write(f"  Accuracy stability (std dev): {stability:.4f}\n")
 
-def run_analysis(result_dir, variants, device):
+
+def run_analysis(result_dir, variant, device):
     """
     Run comprehensive analysis on saved model data
     
     Args:
         result_dir (str): Directory containing saved data
-        variants (list): List of variant names
+        variant (str): Algorithm variant name
         device (torch.device): Device to load models to
     """
     print(f"Running analysis on data in {result_dir}")
     
     # Load saved data
-    models_data, loss_data, accuracy_data = load_data_for_analysis(result_dir, variants)
+    models_data, loss_data, accuracy_data = load_data_for_analysis(result_dir, variant)
     
     # Check if we have any data to analyze
-    if not models_data and not loss_data and not accuracy_data:
+    if models_data is None and loss_data is None and accuracy_data is None:
         print("No data found for analysis. Make sure the paths are correct.")
         return
-    
-    # Recreate models from saved state dicts
-    num_nodes = max([data.shape[1] for variant, data in accuracy_data.items()]) if accuracy_data else 0
-    models = recreate_models(models_data, variants, num_nodes, device)
     
     # Get Byzantine node indices
     byzantine_path = os.path.join(result_dir, "byzantine_indices.npy")
@@ -363,13 +325,22 @@ def run_analysis(result_dir, variants, device):
     else:
         # If no Byzantine indices file, assume no Byzantine nodes
         byzantine_indices = []
+        print("Warning: No Byzantine indices file found. Assuming no Byzantine nodes.")
+    
+    # Recreate models from saved state dicts (if available)
+    if models_data is not None and accuracy_data is not None:
+        num_nodes = accuracy_data.shape[1]
+        models = recreate_models(models_data, num_nodes, device)
+    else:
+        models = None
+        print("Warning: Couldn't recreate models due to missing data.")
     
     # Plot analysis results
-    if loss_data and accuracy_data:
-        plot_convergence_analysis(loss_data, accuracy_data, variants, result_dir)
+    if loss_data is not None and accuracy_data is not None:
+        plot_convergence_analysis(loss_data, accuracy_data, variant, result_dir)
     
-    if models:
-        plot_model_similarity_heatmaps(models, variants, byzantine_indices, result_dir)
-        analyze_parameter_distributions(models, variants, byzantine_indices, result_dir)
+    if models is not None:
+        plot_model_similarity_heatmap(models, byzantine_indices, variant, result_dir)
+        plot_parameter_distributions(models, byzantine_indices, variant, result_dir)
     
     print("Analysis completed.")
