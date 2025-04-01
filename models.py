@@ -1,9 +1,17 @@
 import torch
 import torch.nn as nn
 
+
 class SimpleCNN(nn.Module):
-    def __init__(self):
+    def __init__(self, seed=42):
         super(SimpleCNN, self).__init__()
+
+        # Set the seed for reproducibility
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)  # for multi-GPU
+
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
         self.relu1 = nn.ReLU()
         self.pool1 = nn.MaxPool2d(kernel_size=2)
@@ -19,13 +27,10 @@ class SimpleCNN(nn.Module):
 
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, nn.Conv2d):
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='relu')
-                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         x = self.pool1(self.relu1(self.conv1(x)))
