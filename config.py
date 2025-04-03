@@ -10,12 +10,12 @@ class Config:
         # Hyperparameters
         self.num_nodes = 10
         self.max_byzantine_nodes = 1
-        self.learning_rate = 0.1
+        self.learning_rate = 0.01
         self.batch_size = int(60000 // self.num_nodes)
-        self.num_epochs = 10
+        self.num_epochs = 50
         self.plot_interval = 5
         self.trim_parameter = 1  # For BRIDGE-T and BRIDGE-B
-        self.connectivity = 0.7
+        self.connectivity = 0.8
         self.seed = 23  # For reproducibility
         self.variant = "BRIDGE-T"  # Algorithm variant to use
         
@@ -26,8 +26,6 @@ class Config:
         
         # Paths
         self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.result_dir = f"results_{self.timestamp}"
-        os.makedirs(self.result_dir, exist_ok=True)
         os.makedirs('./data', exist_ok=True)
         
         # Device selection

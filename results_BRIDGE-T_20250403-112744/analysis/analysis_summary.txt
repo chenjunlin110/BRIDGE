@@ -1,0 +1,4 @@
+Analysis results for BRIDGE-T:
+  Final accuracy: 86.08%
+  Convergence epoch: 1
+  Accuracy stability (std dev): 0.3865

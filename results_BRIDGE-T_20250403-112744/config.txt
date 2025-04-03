@@ -1,0 +1,14 @@
+num_nodes: 10
+max_byzantine_nodes: 1
+learning_rate: 0.01
+batch_size: 6000
+num_epochs: 50
+plot_interval: 5
+trim_parameter: 1
+connectivity: 0.8
+seed: 23
+variant: BRIDGE-T
+attack_type: random
+backdoor_attack_label: 7
+backdoor_attack_scale: 1.0
+result_dir: results_BRIDGE-T_20250403-112744
