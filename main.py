@@ -4,6 +4,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import networkx as nx
+from fontTools.merge.util import current_time
+
 from config import Config
 from data_loader import load_data
 from models import SimpleCNN
@@ -26,6 +28,8 @@ def main():
     # Set the variant from command line argument
     variant = config.variant
     print(f"Running with variant: {variant}")
+    start_time = time.time()
+    print(f"Current time: {start_time}")
     
     # Set up result directory
     if args.result_dir:
@@ -62,6 +66,8 @@ def main():
     # Load data
     trainloaders, testloader = load_data(config)
     print("Data loaded successfully")
+    current_time = time.time()
+    print(f"Time of starting: {current_time - start_time}")
 
     # Initialize models
     models = [SimpleCNN().to(config.device) for _ in range(config.num_nodes)]
@@ -77,6 +83,8 @@ def main():
     # Main training loop
     for epoch in range(config.num_epochs):
         print(f"Epoch {epoch+1}/{config.num_epochs}")
+        # time of training one epoch
+        start_time = time.time()
         
         # Get current learning rate
         current_lr = config.learning_rate
@@ -123,7 +131,9 @@ def main():
             all_mean_accuracies = mean_acc_tensor
         else:
             all_mean_accuracies = torch.cat([all_mean_accuracies, mean_acc_tensor])
-        
+
+        current_time = time.time()
+        print(f"time of training one epoch: {current_time - start_time}")
         # Store model states (every 50 epochs or final epoch)
         if epoch % 50 == 0 or epoch == config.num_epochs - 1:
             # Save state dicts for each node
@@ -137,11 +147,11 @@ def main():
             model_states.append(epoch_state_dicts)
             
             # Save tensor files
-            start_time = time.time()
+
             torch.save(all_train_losses, os.path.join(config.result_dir, "loss.pt"))
             torch.save(all_test_accuracies, os.path.join(config.result_dir, "accuracy.pt"))
             torch.save(model_states, os.path.join(config.result_dir, "model.pt"))
-            print(f"Time spent saving: {time.time() - start_time:.2f} seconds")
+
             
             print(f"Saved model states and metrics at epoch {epoch+1}")
 
