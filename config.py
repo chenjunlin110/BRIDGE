@@ -8,16 +8,16 @@ from datetime import datetime
 class Config:
     def __init__(self):
         # Hyperparameters
-        self.num_nodes = 10
-        self.max_byzantine_nodes = 1
+        self.num_nodes = 50
+        self.max_byzantine_nodes = 8
         self.learning_rate = 0.01
         self.batch_size = int(60000 // self.num_nodes)
-        self.num_epochs = 50
+        self.num_epochs = 500
         self.plot_interval = 5
         self.trim_parameter = 1  # For BRIDGE-T and BRIDGE-B
         self.connectivity = 0.8
         self.seed = 23  # For reproducibility
-        self.variant = "BRIDGE-T"  # Algorithm variant to use
+        self.variant = "BRIDGE-K"  # Algorithm variant to use
         
         # Attack parameters
         self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "targeted", "backdoor"

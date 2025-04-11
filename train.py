@@ -62,6 +62,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
     # 2. Broadcast model parameters
     all_params = [[] for _ in range(config.num_nodes)]
     for node_idx in range(config.num_nodes):
+        # print(f"Node {node_idx} - Broadcasting parameters")
         model_param = [param.data.clone() for param in models[node_idx].parameters()]
         # Apply Byzantine attack if this is a Byzantine node
         if node_idx in byzantine_indices:
@@ -76,6 +77,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
         neighbor_indices = np.where(adj_matrix[node_idx])[0]
         try:
             # Get parameters from neighbors
+            print(f"Node {node_idx} - Neighbor indices: {neighbor_indices}")
             neighbor_params = [all_params[i][-1] for i in neighbor_indices]
 
             # Apply screening functions based on variant
