@@ -41,24 +41,46 @@ def scaled_attack(params, device, scale=10.0):
     """
     return [scale * p for p in params]
 
-def targeted_attack(params, device, target_params):
+def label_flipping_attack(params, device, source_label=0, target_label=1):
     """
-    Targeted attack - push parameters toward specific target values
+    Label flipping attack - swap the weights for source and target labels
+    to cause misclassification
     
     Args:
         params (list): List of parameter tensors
         device (torch.device): Device to create tensors on
-        target_params (list): Target parameter values
+        source_label (int): The source label to flip from (default: 0)
+        target_label (int): The target label to flip to (default: 1)
         
     Returns:
         list: Modified parameter tensors
     """
-    if not target_params:
-        # If no target params provided, use sign flipping
-        return sign_flipping_attack(params, device)
+    # Create a copy of the parameters to modify
+    modified_params = [p.clone() for p in params]
     
-    # Push parameters toward target values
-    return [t.to(device) for t in target_params]
+    # Assume the last two layers are the classification layer weights and biases
+    last_layer_weights = modified_params[-2]  # Weights of the final layer
+    last_layer_bias = modified_params[-1]     # Bias of the final layer
+    
+    # Check if we're working with the expected tensor shapes
+    if len(last_layer_weights.shape) == 2:  # For fully connected layers (features x classes)
+        num_classes = last_layer_weights.shape[1]
+        
+        if source_label < num_classes and target_label < num_classes:
+            # Simple approach: Swap the weights for source and target labels
+            # This directly flips the classification between these two classes
+            tmp = last_layer_weights[:, source_label].clone()
+            last_layer_weights[:, source_label] = last_layer_weights[:, target_label]
+            last_layer_weights[:, target_label] = tmp
+            
+            # Also swap the bias terms if they exist
+            if len(last_layer_bias.shape) == 1:  # Typical bias shape
+                tmp_bias = last_layer_bias[source_label].clone()
+                last_layer_bias[source_label] = last_layer_bias[target_label]
+                last_layer_bias[target_label] = tmp_bias
+    
+    return modified_params
+
 
 def backdoor_attack(params, device, target_label=7, scale=1.0):
     """
@@ -108,14 +130,15 @@ def backdoor_attack(params, device, target_label=7, scale=1.0):
         
     return modified_params
     
-# Extend the existing get_byzantine_params function to include backdoor attack
+# Extend the existing get_byzantine_params function to include label flipping attack
 def get_byzantine_params(original_params, attack_type, device, config=None):
     """
     Generate Byzantine parameters based on attack type
     
     Args:
         original_params (list): Original parameter tensors
-        attack_type (str): Type of attack ("random", "sign_flipping", "scaled", "targeted", "backdoor")
+        attack_type (str): Type of attack ("random", "sign_flipping", "scaled", "label_flipping", 
+                           "targeted", "backdoor")
         device (torch.device): Device to create tensors on
         config (Config, optional): Configuration object for additional parameters
         
@@ -134,12 +157,18 @@ def get_byzantine_params(original_params, attack_type, device, config=None):
             if config and hasattr(config, 'backdoor_attack_label'):
                 target_label = config.backdoor_attack_label
             return backdoor_attack(original_params, device, target_label=target_label)
-        elif attack_type.startswith("targeted:"):
-            # Extract target parameter identifier from attack type
-            target_id = attack_type.split(":", 1)[1]
-            # This would require additional logic to select target parameters
-            # For now, default to sign flipping
-            return sign_flipping_attack(original_params, device)
+        elif attack_type == "label_flipping":
+            # Parse configuration parameters if available
+            source_label = 0
+            target_label = 1
+            
+            if config:
+                if hasattr(config, 'source_label'):
+                    source_label = config.source_label
+                if hasattr(config, 'target_label'):
+                    target_label = config.target_label
+                    
+            return label_flipping_attack(original_params, device, source_label, target_label)
         else:
             print(f"Warning: Unknown attack type '{attack_type}'. Using original parameters.")
             return original_params  # Default case - no attack

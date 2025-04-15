@@ -77,7 +77,7 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
         neighbor_indices = np.where(adj_matrix[node_idx])[0]
         try:
             # Get parameters from neighbors
-            print(f"Node {node_idx} - Neighbor indices: {neighbor_indices}")
+            # print(f"Node {node_idx} - Neighbor indices: {neighbor_indices}")
             neighbor_params = [all_params[i][-1] for i in neighbor_indices]
 
             # Apply screening functions based on variant
