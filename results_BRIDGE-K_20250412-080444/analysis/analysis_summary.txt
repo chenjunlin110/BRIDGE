@@ -1,0 +1,4 @@
+Analysis results for BRIDGE-K:
+  Final accuracy: 94.13%
+  Convergence epoch: 1
+  Accuracy stability (std dev): 0.0255
