@@ -20,7 +20,7 @@ class Config:
         self.variant = "BRIDGE-T"  # Algorithm variant to use
         
         # Attack parameters
-        self.attack_type = "sign_flipping"  # Options: "random", "sign_flipping", "scaled", "label_flipping", "backdoor"
+        self.attack_type = "constant"  # Options: "random", "sign_flipping", "scaled", "label_flipping", "constant"
         self.backdoor_attack_label = 7  # Target label for backdoor attack
         self.backdoor_attack_scale = 1.0  # Scaling factor for backdoor attack
         

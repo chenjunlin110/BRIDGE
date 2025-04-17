@@ -27,6 +27,9 @@ def sign_flipping_attack(params, device):
     """
     return [-1.0 * p for p in params]
 
+def constant_attack(params, constant=1.0):
+    return [constant for p in params]
+
 def scaled_attack(params, device, scale=10.0):
     """
     Scaled attack - multiply parameters by a large factor
@@ -156,6 +159,7 @@ def get_byzantine_params(original_params, attack_type, device, config=None):
             target_label = 7  # Default target label
             if config and hasattr(config, 'backdoor_attack_label'):
                 target_label = config.backdoor_attack_label
+                target_label = config.backdoor_attack_label
             return backdoor_attack(original_params, device, target_label=target_label)
         elif attack_type == "label_flipping":
             # Parse configuration parameters if available
@@ -169,6 +173,8 @@ def get_byzantine_params(original_params, attack_type, device, config=None):
                     target_label = config.target_label
                     
             return label_flipping_attack(original_params, device, source_label, target_label)
+        elif attack_type == "constant":
+            return constant_attack(original_params, constant=1.0)
         else:
             print(f"Warning: Unknown attack type '{attack_type}'. Using original parameters.")
             return original_params  # Default case - no attack
