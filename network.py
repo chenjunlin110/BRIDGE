@@ -167,7 +167,7 @@ def median_screen(params_list):
         # Reshape back to original shape
         aggregated_params.append(median_values.reshape(original_shape))
 
-    return aggregated_params
+    return aggregated_params, aggregated_neighbors_idx
 
 def krum_screen(params_list, num_byzantine, device):
     """
@@ -212,7 +212,7 @@ def krum_screen(params_list, num_byzantine, device):
 
     # Select parameter set with minimum score
     selected_index = torch.argmin(scores).item()
-    return params_list[selected_index]
+    return params_list[selected_index], selected_index
 
 def krum_trimmed_mean_screen(params_list, trim_param, num_byzantine, device):
     """

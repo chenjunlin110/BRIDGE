@@ -60,7 +60,7 @@ def load_data(config):
         testloader = torch.utils.data.DataLoader(
             testset, 
             batch_size=config.batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=2 if torch.cuda.is_available() else 0,
             pin_memory=torch.cuda.is_available()
         )

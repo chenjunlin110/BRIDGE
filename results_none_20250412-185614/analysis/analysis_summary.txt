@@ -1,4 +1,0 @@
-Analysis results for none:
-  Final accuracy: 9.80%
-  Convergence epoch: 1
-  Accuracy stability (std dev): 0.0000

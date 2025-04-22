@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import os
+import inspect
 from byzantine import get_byzantine_params
 from network import trimmed_mean_screen, median_screen, krum_screen, krum_trimmed_mean_screen, no_screen
 
@@ -32,6 +33,9 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
     # Variable to store mean loss for return
     mean_loss = 0.0
 
+    # Dictionary to track selected neighbors
+    selected_neighbors = {node_idx: [] for node_idx in range(config.num_nodes)}
+
     # 1. Each node computes local gradients
     local_gradients = {node_idx: [] for node_idx in range(config.num_nodes)}
     for node_idx in range(config.num_nodes):
@@ -59,14 +63,28 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
         except Exception as e:
             print(f"Error in training node {node_idx}: {str(e)}")
 
-    # 2. Broadcast model parameters
+   # 2. Broadcast model parameters
     all_params = [[] for _ in range(config.num_nodes)]
     for node_idx in range(config.num_nodes):
-        # print(f"Node {node_idx} - Broadcasting parameters")
+        # Get honest parameters first
         model_param = [param.data.clone() for param in models[node_idx].parameters()]
+        
         # Apply Byzantine attack if this is a Byzantine node
         if node_idx in byzantine_indices:
-            model_param = get_byzantine_params(model_param, attack_type, config.device, config)
+            targeted_attack_node = np.random.choice(np.where(adj_matrix[node_idx])[0])
+            print(f"Byzantine node {node_idx} attacking node {targeted_attack_node}")
+            # Collect all honest nodes' parameters to use in certain attack types
+            honest_params = []
+            neighbor_indices = np.where(adj_matrix[targeted_attack_node])[0]
+            for i in neighbor_indices:
+                if i not in byzantine_indices:
+                    honest_params.append([param.data.clone() for param in models[i].parameters()])
+            
+            # Apply the attack
+            model_param = get_byzantine_params(model_param, attack_type, config.device, config, honest_params)
+            
+            if epoch % 50 == 0:
+                print(f"Applied {attack_type} attack to Byzantine node {node_idx}")
 
         all_params[node_idx].append(model_param)
 
@@ -77,73 +95,124 @@ def train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion, 
         neighbor_indices = np.where(adj_matrix[node_idx])[0]
         try:
             # Get parameters from neighbors
-            # print(f"Node {node_idx} - Neighbor indices: {neighbor_indices}")
             neighbor_params = [all_params[i][-1] for i in neighbor_indices]
-
+            neighbor_indices = neighbor_indices.tolist()
+            
             # Apply screening functions based on variant
             if variant == "BRIDGE-T":
                 # Check if we have enough params for trimming
                 if len(neighbor_params) <= 2 * config.trim_parameter:
                     # Not enough for trimming, use median instead as fallback
                     print(f"Warning: Not enough neighbors for BRIDGE-T at node {node_idx}. Using median as fallback.")
-                    aggregated_params = median_screen(neighbor_params)
+                    if hasattr(median_screen, '__defaults__') and median_screen.__defaults__ and 'return_indices' in inspect.signature(median_screen).parameters:
+                        aggregated_params, chosen_indices = median_screen(neighbor_params, return_indices=True)
+                    else:
+                        aggregated_params = median_screen(neighbor_params)
+                        chosen_indices = [len(neighbor_params) // 2]  # Approximate for old function
                 else:
-                    aggregated_params = trimmed_mean_screen(neighbor_params, config.trim_parameter)
+                    if hasattr(trimmed_mean_screen, '__defaults__') and trimmed_mean_screen.__defaults__ and 'return_indices' in inspect.signature(trimmed_mean_screen).parameters:
+                        aggregated_params, chosen_indices = trimmed_mean_screen(neighbor_params, config.trim_parameter, return_indices=True)
+                    else:
+                        aggregated_params = trimmed_mean_screen(neighbor_params, config.trim_parameter)
+                        chosen_indices = list(range(config.trim_parameter, len(neighbor_params) - config.trim_parameter))
+                
             elif variant == "BRIDGE-M":
-                aggregated_params = median_screen(neighbor_params)
+                if hasattr(median_screen, '__defaults__') and median_screen.__defaults__ and 'return_indices' in inspect.signature(median_screen).parameters:
+                    aggregated_params, chosen_indices = median_screen(neighbor_params, return_indices=True)
+                else:
+                    aggregated_params = median_screen(neighbor_params)
+                    chosen_indices = [len(neighbor_params) // 2]  # Approximate for old function
+                    
             elif variant == "BRIDGE-K":
                 # Check if we have enough params for Krum
                 max_byzantine = min(len(byzantine_indices), len(neighbor_params) - 2)
                 if max_byzantine <= 0:
                     # Not enough for Krum, use median as fallback
                     print(f"Warning: Not enough neighbors for BRIDGE-K at node {node_idx}. Using median as fallback.")
-                    aggregated_params = median_screen(neighbor_params)
+                    if hasattr(median_screen, '__defaults__') and median_screen.__defaults__ and 'return_indices' in inspect.signature(median_screen).parameters:
+                        aggregated_params, chosen_indices = median_screen(neighbor_params, return_indices=True)
+                    else:
+                        aggregated_params = median_screen(neighbor_params)
+                        chosen_indices = [len(neighbor_params) // 2]  # Approximate for old function
                 else:
-                    aggregated_params = krum_screen(neighbor_params, max_byzantine, config.device)
+                    if hasattr(krum_screen, '__defaults__') and krum_screen.__defaults__ and 'return_index' in inspect.signature(krum_screen).parameters:
+                        aggregated_params, chosen_index = krum_screen(neighbor_params, max_byzantine, config.device, return_index=True)
+                        chosen_indices = [chosen_index]
+                    else:
+                        aggregated_params = krum_screen(neighbor_params, max_byzantine, config.device)
+                        chosen_indices = []  # Cannot determine with old function
+                
             elif variant == "BRIDGE-B":
                 # Check conditions for both Krum and trimmed_mean
                 max_byzantine = min(len(byzantine_indices), len(neighbor_params) - 2)
                 if max_byzantine <= 0 or len(neighbor_params) <= 2 * config.trim_parameter:
                     # Not enough for combination, use median as fallback
                     print(f"Warning: Not enough neighbors for BRIDGE-B at node {node_idx}. Using median as fallback.")
-                    aggregated_params = median_screen(neighbor_params)
+                    if hasattr(median_screen, '__defaults__') and median_screen.__defaults__ and 'return_indices' in inspect.signature(median_screen).parameters:
+                        aggregated_params, chosen_indices = median_screen(neighbor_params, return_indices=True)
+                    else:
+                        aggregated_params = median_screen(neighbor_params)
+                        chosen_indices = [len(neighbor_params) // 2]  # Approximate for old function
                 else:
-                    aggregated_params = krum_trimmed_mean_screen(neighbor_params, config.trim_parameter,
-                                                            max_byzantine, config.device)
+                    if hasattr(krum_trimmed_mean_screen, '__defaults__') and krum_trimmed_mean_screen.__defaults__ and 'return_indices' in inspect.signature(krum_trimmed_mean_screen).parameters:
+                        aggregated_params, chosen_indices = krum_trimmed_mean_screen(
+                            neighbor_params, config.trim_parameter, max_byzantine, config.device, return_indices=True
+                        )
+                    else:
+                        aggregated_params = krum_trimmed_mean_screen(
+                            neighbor_params, config.trim_parameter, max_byzantine, config.device
+                        )
+                        chosen_indices = []  # Cannot determine with old function
+                
             elif variant == "none":
                 aggregated_params = no_screen(neighbor_params)
+                chosen_indices = list(range(len(neighbor_params)))  # All nodes used
             else:
                 raise ValueError(f"Unknown variant: {variant}")
+
+            # Map chosen indices back to actual node indices if we have them
+            if chosen_indices:
+                chosen_nodes = [neighbor_indices[i] for i in chosen_indices if i < len(neighbor_indices)]
+                selected_neighbors[node_idx] = chosen_nodes
 
             filtered_params[node_idx].append(aggregated_params)
         except Exception as e:
             print(f"Error in screening for node {node_idx}, variant {variant}: {str(e)}")
             # Use node's own parameters as fallback
-            filtered_params[node_idx].append(all_params[node_idx])
+            filtered_params[node_idx].append(all_params[node_idx][-1])
+            selected_neighbors[node_idx] = [node_idx]  # Only self as fallback
+
+    # Print selected neighbors for each node (periodically)
+    if hasattr(config, 'print_neighbors_interval') and epoch % config.print_neighbors_interval == 0:
+        print(f"\n--- Epoch {epoch+1} - Selected Neighbors After Screening ---")
+        for node_idx in range(config.num_nodes):
+            if node_idx not in byzantine_indices:
+                print(f"Node {node_idx}: Selected {len(selected_neighbors[node_idx])} neighbors - {selected_neighbors[node_idx]}")
+            else:
+                print(f"Node {node_idx} (Byzantine): Selected {len(selected_neighbors[node_idx])} neighbors - {selected_neighbors[node_idx]}")
+        print("-------------------------------------------\n")
 
     # 4. Update models
     for node_idx in range(config.num_nodes):
-        # Skip Byzantine nodes (their parameters are irrelevant for evaluation)
-        if node_idx not in byzantine_indices:
-            try:
-                # Verify we have valid parameters and gradients
-                if (node_idx < len(filtered_params) and 
-                    node_idx < len(local_gradients) and
-                    filtered_params[node_idx] is not None and
-                    local_gradients[node_idx] is not None):
-                    
-                    # Manual update using filtered parameters and local gradients
-                    model_params = list(models[node_idx].parameters())
-                    for param_idx, (param, agg_param, grad) in enumerate(zip(
-                            model_params,
-                            filtered_params[node_idx][-1],
-                            local_gradients[node_idx][-1])):
-                        # Update: param = aggregated_param - lr * gradient
-                        param.data = agg_param - current_lr * grad
-                else:
-                    print(f"Warning: Missing parameters or gradients for node {node_idx}")
-            except Exception as e:
-                print(f"Error updating model for node {node_idx}: {str(e)}")
+        try:
+            # Verify we have valid parameters and gradients
+            if (node_idx < len(filtered_params) and 
+                node_idx < len(local_gradients) and
+                filtered_params[node_idx] is not None and
+                local_gradients[node_idx] is not None):
+                
+                # Manual update using filtered parameters and local gradients
+                model_params = list(models[node_idx].parameters())
+                for param_idx, (param, agg_param, grad) in enumerate(zip(
+                        model_params,
+                        filtered_params[node_idx][-1],
+                        local_gradients[node_idx][-1])):
+                    # Update: param = aggregated_param - lr * gradient
+                    param.data = agg_param - current_lr * grad
+            else:
+                print(f"Warning: Missing parameters or gradients for node {node_idx}")
+        except Exception as e:
+            print(f"Error updating model for node {node_idx}: {str(e)}")
 
     # Calculate mean loss (excluding Byzantine nodes)
     honest_losses = [loss for i, loss in enumerate(epoch_losses) 

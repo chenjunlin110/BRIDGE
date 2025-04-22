@@ -1,18 +1,20 @@
 import torch
 import numpy as np
 
-def random_attack(params, device):
+def random_attack(params, device, var=0.1):
     """
-    Random values attack - replace parameters with random noise
+    Random values attack - add random noise scaled by a factor
     
     Args:
         params (list): List of parameter tensors
         device (torch.device): Device to create tensors on
+        var (float): Variance/scale of the random noise
         
     Returns:
         list: Modified parameter tensors
     """
-    return [torch.randn_like(p).to(device) for p in params]
+    print(f"Applying random attack with variance {var}")
+    return [p + var * torch.randn_like(p).to(device) for p in params]
 
 def sign_flipping_attack(params, device):
     """
@@ -40,6 +42,65 @@ def scaled_attack(params, device, scale=10.0):
         list: Modified parameter tensors
     """
     return [scale * p for p in params]
+
+def trimmed_mean_attack(params, device, trim_param=4, honest_params=None):
+    """
+    Attack that targets trimmed mean defense by placing values at the boundary
+    of what would be trimmed
+    
+    Args:
+        params (list): List of parameter tensors
+        device (torch.device): Device to create tensors on
+        trim_param (int): Trimming parameter used in the defense
+        honest_params (list): List of honest nodes' parameter tensors
+        
+    Returns:
+        list: Modified parameter tensors
+    """
+    if honest_params is None or len(honest_params) == 0:
+        # Fallback to random attack if no honest params provided
+        return random_attack(params, device)
+    
+    num_params = len(params)
+    aggregated_params = []
+
+    # Check if we have enough honest parameters for the attack
+    if len(honest_params) <= trim_param:
+        print("Warning: Not enough honest parameters for trimmed mean attack. Falling back to random attack.")
+        return random_attack(params, device)
+
+    for param_idx in range(num_params):
+        # Get original shape for reshaping later
+        original_shape = params[param_idx].shape
+
+        # Stack honest parameters for this layer
+        if len(original_shape) > 1:  # For multi-dimensional tensors
+            param_values = torch.stack([p[param_idx].reshape(-1) for p in honest_params], dim=0)
+        else:  # For vectors
+            param_values = torch.stack([p[param_idx] for p in honest_params], dim=0)
+
+        # Sort values along the first dimension (nodes)
+        sorted_values, _ = torch.sort(param_values, dim=0)
+
+        # Strategy: Choose either the lower or upper trim boundary to maximize effect
+        lower_bound = sorted_values[trim_param]
+        upper_bound = sorted_values[-(trim_param+1)]
+        
+        # Use the boundary that deviates more from the mean
+        mean_value = torch.mean(sorted_values, dim=0)
+        lower_diff = torch.abs(lower_bound - mean_value)
+        upper_diff = torch.abs(upper_bound - mean_value)
+        
+        # If lower boundary deviates more, use it; otherwise use upper boundary
+        boundary_to_use = torch.where(lower_diff > upper_diff, lower_bound, upper_bound)
+        
+        # Optionally amplify the effect slightly
+        attack_param = boundary_to_use * 1.2
+        
+        # Reshape back to original shape and add to aggregated parameters
+        aggregated_params.append(attack_param.reshape(original_shape))
+
+    return aggregated_params
 
 def label_flipping_attack(params, device, source_label=0, target_label=1):
     """
@@ -130,24 +191,28 @@ def backdoor_attack(params, device, target_label=7, scale=1.0):
         
     return modified_params
     
-# Extend the existing get_byzantine_params function to include label flipping attack
-def get_byzantine_params(original_params, attack_type, device, config=None):
+def get_byzantine_params(original_params, attack_type, device, config=None, honest_params=None):
     """
     Generate Byzantine parameters based on attack type
     
     Args:
         original_params (list): Original parameter tensors
         attack_type (str): Type of attack ("random", "sign_flipping", "scaled", "label_flipping", 
-                           "targeted", "backdoor")
+                           "targeted", "backdoor", "trimmed_mean")
         device (torch.device): Device to create tensors on
         config (Config, optional): Configuration object for additional parameters
+        honest_params (list): List of honest nodes' parameter sets for certain attack types
         
     Returns:
         list: Modified parameter tensors for Byzantine attack
     """
     try:
+        random_attack_var = 0.01  # Default value
+        if config and hasattr(config, 'random_attack_var'):
+            random_attack_var = config.random_attack_var
+            
         if attack_type == "random":
-            return random_attack(original_params, device)
+            return random_attack(original_params, device, var=random_attack_var)
         elif attack_type == "sign_flipping":
             return sign_flipping_attack(original_params, device)
         elif attack_type == "scaled":
@@ -169,6 +234,11 @@ def get_byzantine_params(original_params, attack_type, device, config=None):
                     target_label = config.target_label
                     
             return label_flipping_attack(original_params, device, source_label, target_label)
+        elif attack_type == "trimmed_mean":
+            trim_param = 4  # Default
+            if config and hasattr(config, 'trim_parameter'):
+                trim_param = config.trim_parameter
+            return trimmed_mean_attack(original_params, device, trim_param, honest_params)
         else:
             print(f"Warning: Unknown attack type '{attack_type}'. Using original parameters.")
             return original_params  # Default case - no attack

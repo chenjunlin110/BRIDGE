@@ -15,12 +15,12 @@ class Config:
         self.num_epochs = 500
         self.plot_interval = 5
         self.trim_parameter = 4  # For BRIDGE-T and BRIDGE-B
-        self.connectivity = 0.8
+        self.connectivity = 0.5
         self.seed = 23  # For reproducibility
         self.variant = "BRIDGE-T"  # Algorithm variant to use
-        
+        self.random_attack_var = 5
         # Attack parameters
-        self.attack_type = "sign_flipping"  # Options: "random", "sign_flipping", "scaled", "label_flipping", "backdoor"
+        self.attack_type = "random"  # Options: "random", "sign_flipping", "scaled", "label_flipping", "backdoor"
         self.backdoor_attack_label = 7  # Target label for backdoor attack
         self.backdoor_attack_scale = 1.0  # Scaling factor for backdoor attack
         

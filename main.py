@@ -86,8 +86,8 @@ def main():
         
         # Get current attack type
         attack_type = config.attack_type
-        if hasattr(config, 'attack_schedule'):
-            attack_type = config.attack_schedule(epoch)
+        # if hasattr(config, 'attack_schedule'):
+        #     attack_type = config.attack_schedule(epoch)
 
         # Train one epoch
         mean_loss, epoch_losses = train_epoch(models, trainloaders, adj_matrix, byzantine_indices, criterion,
